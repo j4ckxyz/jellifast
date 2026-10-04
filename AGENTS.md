@@ -175,9 +175,21 @@ mise or mbx.
 
 ## Releases
 
-No release of Jellifast exists yet. The release, packaging and Flatpak
-workflows are inherited and still need the project's own signing identities,
-Homebrew tap and AUR packages before a tag is pushed; `flake.nix` needs its
-vendor hash refreshed whenever the lockfile changes. Do not tag a release
-until `PACKAGING.md` and `native-packages.yaml` describe destinations that
-exist. Written notes go in `packaging/release-notes/vVERSION.md`.
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the
+Linux archives, the Windows zips and installers, the universal macOS DMG and
+the Flatpak bundle, and publishes them with `checksums.txt` on the GitHub
+release. Do these in order:
+
+1. Change the `Cargo.toml` version, add the matching release to the Flatpak
+   metainfo, and update the lockfile with a build. Refresh the `flake.nix`
+   vendor hash when the lockfile changes. Write the notes in
+   `packaging/release-notes/vVERSION.md`. Commit and push this before the tag,
+   and wait for CI on that commit.
+2. Push the tag. Wait for every artifact and `checksums.txt`, then check the
+   published notes and download links.
+
+The downloads are not signed by a publisher: the macOS app is signed ad hoc
+and not notarized, the Windows installer has no code-signing certificate, and
+`checksums.txt` has no signature. Say so wherever downloads are offered; do
+not describe them as signed. Homebrew and AUR publishing stay off until
+`PUBLISH_HOMEBREW` and `PUBLISH_AUR` are set and their repositories exist.

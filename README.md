@@ -35,6 +35,18 @@ Spotifast's. It is not affiliated with the Jellyfin project or with Spotify.
 [What Jellyfin Offers](docs/_reference/what-jellyfin-offers.md) has the full
 list and what is not there yet.
 
+## Download
+
+[Releases](https://github.com/j4ckxyz/jellifast/releases) has builds for
+macOS (universal DMG), Windows (installer and portable zip, x64 and ARM64) and
+Linux (archives for x86-64 and ARM64, and a Flatpak bundle), with
+`checksums.txt` beside them.
+
+The builds are not signed by a publisher. On macOS, open the app the first time
+with a right-click and **Open**, or allow it under System Settings, Privacy &
+Security. On Windows, SmartScreen asks before running the installer: choose
+**More info**, then **Run anyway**.
+
 ## Build
 
 ```sh

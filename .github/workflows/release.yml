@@ -220,9 +220,6 @@ jobs:
     needs: [build, macos, flatpak]
     if: ${{ !cancelled() && needs.build.result == 'success' && needs.macos.result == 'success' }}
     runs-on: ubuntu-latest
-    # Publishing waits for the maintainer's approval, and only this job can
-    # read the release signing key (v* tags only).
-    environment: release-signing
     steps:
       - uses: actions/checkout@v7
         with:
@@ -240,22 +237,9 @@ jobs:
             --output "dist/jellifast-${GITHUB_REF_NAME}-source.tar.gz"
       - name: Public filenames, updater compatibility and checksums
         run: python3 packaging/release-names.py dist "$GITHUB_REF_NAME"
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '4.0'
-      # Sign the manifest release-names.py wrote (checksums.txt.sig), then
-      # check the signature and every listed file against the committed key.
-      # Updaters that carry the key refuse releases without a valid one.
-      - name: Sign checksums
-        env:
-          JELLIFAST_UPDATE_SIGNING_KEY: ${{ secrets.JELLIFAST_UPDATE_SIGNING_KEY }}
-        run: |
-          gem install native-packages --version 0.8.1 --no-document
-          native-packages sign-checksums dist/checksums.txt \
-            --public-key assets/update-public-key.hex \
-            --key-env JELLIFAST_UPDATE_SIGNING_KEY
-          native-packages verify-checksums dist/checksums.txt \
-            --public-key assets/update-public-key.hex
+      # checksums.txt is published unsigned: the project has no release
+      # signing key yet, and the app's updater (src/updates.rs) carries none
+      # to check against. Add the key and a signing step here together.
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
