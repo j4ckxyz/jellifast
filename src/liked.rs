@@ -295,7 +295,7 @@ mod tests {
     fn item(n: u32) -> SavedTrack {
         SavedTrack {
             track: Track {
-                uri: format!("spotify:track:{n}"),
+                uri: format!("jellyfin:track:{n}"),
                 name: format!("Song {n}"),
                 ..Default::default()
             },
@@ -478,7 +478,7 @@ mod tests {
     #[tokio::test]
     async fn corrupt_wrong_account_and_interrupted_cache_writes_are_harmless() {
         let root =
-            std::env::temp_dir().join(format!("spotifast-liked-cache-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-liked-cache-{}", std::process::id()));
         let _ = tokio::fs::remove_dir_all(&root).await;
         let path = root.join("liked.json");
         let mut songs = loaded(50, 100);

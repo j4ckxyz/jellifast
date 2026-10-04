@@ -11,10 +11,10 @@
 //! port that answers only requests carrying the random token the running
 //! instance writes beside the lock.
 //!
-//! Clients send one `spotifast:<verb>` line and receive one reply. Commands
+//! Clients send one `jellifast:<verb>` line and receive one reply. Commands
 //! enter the same action queue as tray and media-key events. Read commands use
 //! snapshots, so the listener thread never accesses app state. The
-//! `spotifast` command-line subcommands are clients of this channel; MPRIS
+//! `jellifast` command-line subcommands are clients of this channel; MPRIS
 //! remains for media keys and desktop players on Linux.
 //!
 //! Clients poll the current snapshot; the app does not push updates.
@@ -25,8 +25,8 @@
 //! instance the same way, as `open-link`.
 
 /// The name every request and reply starts with, so a copy of another app
-/// never obeys Spotifast's requests.
-const NAME: &str = "spotifast";
+/// never obeys Jellifast's requests.
+const NAME: &str = "jellifast";
 
 /// The reply to an accepted command.
 const OK_REPLY: &str = "ok";
@@ -132,7 +132,7 @@ pub const NO_DEVICES: &str = "[]";
 /// runtime directory on Linux (the app's own inside Flatpak), the user's
 /// private temporary directory on macOS, where a socket path under
 /// Application Support can outgrow the 104 bytes macOS allows with a long
-/// user name, and beside Spotifast's state on Windows.
+/// user name, and beside Jellifast's state on Windows.
 fn slot() -> fastframe_instance::Slot {
     #[cfg(not(windows))]
     {
@@ -166,7 +166,7 @@ pub fn send(verb: &str) -> std::io::Result<Reply> {
     reply(&slot().send(verb)?)
 }
 
-/// Reads the running instance's reply, without the `spotifast:` prefix the
+/// Reads the running instance's reply, without the `jellifast:` prefix the
 /// channel already checked.
 fn reply(line: &str) -> std::io::Result<Reply> {
     if line == OK_REPLY {
@@ -178,7 +178,7 @@ fn reply(line: &str) -> std::io::Result<Reply> {
     } else {
         Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
-            "the running Spotifast answered something unexpected",
+            "the running Jellifast answered something unexpected",
         ))
     }
 }
@@ -213,12 +213,12 @@ fn claim(
         }
         fastframe_instance::Claim::Running(_) => Outcome::Surfaced,
         fastframe_instance::Claim::Declined => {
-            log::warn!("Spotifast is already running and declined this launch's request");
+            log::warn!("Jellifast is already running and declined this launch's request");
             Outcome::Surfaced
         }
         fastframe_instance::Claim::Unanswered => {
             log::warn!(
-                "Spotifast is already running but did not answer; not starting a second copy"
+                "Jellifast is already running but did not answer; not starting a second copy"
             );
             Outcome::Surfaced
         }
@@ -275,7 +275,7 @@ enum Request {
 }
 
 /// Reads one request line, the channel having already checked and removed
-/// its `spotifast:` prefix.
+/// its `jellifast:` prefix.
 fn parse(line: &str) -> Option<Request> {
     let verb = line.trim_end();
     let (verb, argument) = match verb.split_once(' ') {
@@ -322,7 +322,7 @@ fn parse(line: &str) -> Option<Request> {
 /// Validates the scheme, length, and characters of a Spotify URI received over
 /// the control channel.
 fn spotify_uri(text: &str) -> Option<String> {
-    let shaped = text.starts_with("spotify:")
+    let shaped = text.starts_with("jellyfin:")
         && text.len() <= 128
         && text
             .chars()
@@ -402,9 +402,9 @@ mod tests {
         );
         assert_eq!(command("save-toggle"), Some(ControlCommand::ToggleSaved));
         assert_eq!(
-            command("play-uri spotify:playlist:37i9dQZF1DXcBWIGoYBM5M"),
+            command("play-uri jellyfin:playlist:37i9dQZF1DXcBWIGoYBM5M"),
             Some(ControlCommand::PlayUri(
-                "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M".to_owned()
+                "jellyfin:playlist:37i9dQZF1DXcBWIGoYBM5M".to_owned()
             ))
         );
         assert_eq!(
@@ -414,9 +414,9 @@ mod tests {
         // A link arrives in whatever shape the desktop had it and leaves
         // as the one URI the app navigates by.
         assert_eq!(
-            command("open-link https://open.spotify.com/album/1DFixLWuPkv3KT3TnV35m3?si=x"),
+            command("open-link jellifast://album/1DFixLWuPkv3KT3TnV35m3?si=x"),
             Some(ControlCommand::OpenLink(
-                "spotify:album:1DFixLWuPkv3KT3TnV35m3".to_owned()
+                "jellyfin:album:1DFixLWuPkv3KT3TnV35m3".to_owned()
             ))
         );
         assert!(matches!(parse("nowplaying"), Some(Request::NowPlaying)));
@@ -438,14 +438,14 @@ mod tests {
     fn refuses_arguments_that_are_not_shaped_like_spotifys_own() {
         // #given / #when / #then
         assert!(command("play-uri http://example.com/pwn").is_none());
-        assert!(command("play-uri spotify:track:a b").is_none());
+        assert!(command("play-uri jellyfin:track:a b").is_none());
         assert!(command("play-uri ../../etc/passwd").is_none());
         assert!(command("play-uri").is_none());
-        assert!(command(&format!("play-uri spotify:{}", "x".repeat(200))).is_none());
+        assert!(command(&format!("play-uri jellyfin:{}", "x".repeat(200))).is_none());
         assert!(command("transfer ../secrets").is_none());
         assert!(command("transfer").is_none());
         assert!(command("open-link https://example.com/track/x").is_none());
-        assert!(command("open-link spotify:user:someone").is_none());
+        assert!(command("open-link jellyfin:user:someone").is_none());
         assert!(command("open-link").is_none());
         // A word that is not one of the three is refused rather than read
         // as `off`, which is what `RepeatMode::from_api` would have done.
@@ -454,11 +454,11 @@ mod tests {
         assert!(command("seek-to -1").is_none());
     }
 
-    /// A slot of its own in a throwaway directory, so a Spotifast already
+    /// A slot of its own in a throwaway directory, so a Jellifast already
     /// running on this machine is left alone.
     fn test_slot(name: &str) -> (fastframe_instance::Slot, std::path::PathBuf) {
         let dir =
-            std::env::temp_dir().join(format!("spotifast-instance-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-instance-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         (fastframe_instance::Slot::at(&dir, NAME), dir)
     }
@@ -475,14 +475,14 @@ mod tests {
         };
 
         // #when
-        let second = claim(&slot, &waker, Some("spotify:album:1DFixLWuPkv3KT3TnV35m3"));
+        let second = claim(&slot, &waker, Some("jellyfin:album:1DFixLWuPkv3KT3TnV35m3"));
 
         // #then
         assert!(matches!(second, Outcome::Surfaced));
         assert_eq!(
             *first.commands.lock().expect("the queue"),
             vec![ControlCommand::OpenLink(
-                "spotify:album:1DFixLWuPkv3KT3TnV35m3".to_owned()
+                "jellyfin:album:1DFixLWuPkv3KT3TnV35m3".to_owned()
             )]
         );
         drop(first);
@@ -509,11 +509,11 @@ mod tests {
         let snapshot = send("nowplaying").expect("a reply");
         let listed = send("devices").expect("a reply");
         let search =
-            crate::link::parse(&format!("spotify:search:{}", "東京の音楽 ".repeat(20))).unwrap();
+            crate::link::parse(&format!("jellyfin:search:{}", "東京の音楽 ".repeat(20))).unwrap();
         assert!(search.len() > 256, "exercise a long search link");
         let searched = send(&format!("open-link {search}")).expect("a search reply");
         let oversized = send(&format!(
-            "open-link spotify:search:{}",
+            "open-link jellyfin:search:{}",
             "x".repeat(16 * 1024)
         ));
         let refused = send("frobnicate");

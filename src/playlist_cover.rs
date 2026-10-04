@@ -98,7 +98,7 @@ pub fn prepare(bytes: &[u8]) -> Result<Cover, String> {
             }
         }
     }
-    Err("This image is too detailed for Spotify's upload limit. Choose a smaller image.".into())
+    Err("This image is too detailed to upload. Choose a smaller image.".into())
 }
 
 fn bounded_decode(bytes: &[u8]) -> Result<image::DynamicImage, String> {
@@ -198,7 +198,7 @@ mod tests {
         image.write_to(&mut jpeg, ImageFormat::Jpeg).unwrap();
         assert!(prepare(jpeg.get_ref()).is_ok());
         let missing = std::env::temp_dir().join(format!(
-            "spotifast-missing-cover-{}.jpg",
+            "jellifast-missing-cover-{}.jpg",
             std::process::id()
         ));
         assert!(read(&missing).unwrap_err().contains("Couldn't open"));

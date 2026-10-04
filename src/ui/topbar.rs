@@ -422,19 +422,6 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             ui.add_space(10.0);
                             theme::text(ui, &name, theme::semibold(14.0), palette.text);
                         });
-                        if let Some(product) =
-                            app.user.as_ref().and_then(|user| user.product.clone())
-                        {
-                            ui.horizontal(|ui| {
-                                ui.add_space(10.0);
-                                theme::text(
-                                    ui,
-                                    capitalize(&product),
-                                    theme::regular(12.0),
-                                    palette.secondary,
-                                );
-                            });
-                        }
                         super::widgets::menu_separator(ui, &palette);
                         if super::widgets::menu_item(
                             ui,
@@ -514,7 +501,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 // while, long enough that fast requests never flash it.
                 if busy {
                     theme::spinner(ui, SPINNER_SIZE, palette.secondary)
-                        .on_hover_text(gettext(locale, "Waiting for Spotify…").as_ref());
+                        .on_hover_text(gettext(locale, "Waiting for the server…").as_ref());
                 }
                 // Where playback is.
                 if let Some(galley) = device_galley {
@@ -561,14 +548,6 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             });
         },
     );
-}
-
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-        None => String::new(),
-    }
 }
 
 #[cfg(test)]

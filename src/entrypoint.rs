@@ -1,4 +1,4 @@
-use spotifast::{app, backend, paths, settings, single_instance, util};
+use jellifast::{app, backend, paths, settings, single_instance, util};
 
 use clap::{CommandFactory, FromArgMatches, Parser};
 
@@ -10,8 +10,8 @@ struct Cli {
     #[command(subcommand)]
     control: Option<Control>,
 
-    /// A Spotify link to open: spotify:track:…, or an open.spotify.com
-    /// address. The running Spotifast opens it when there is one, which
+    /// A link to open: jellyfin:track:…, or a jellifast://
+    /// address. The running Jellifast opens it when there is one, which
     /// is how the desktop hands links over.
     #[arg(value_name = "LINK")]
     link: Option<String>,
@@ -56,7 +56,7 @@ struct Cli {
     /// Requires demo mode.
     #[cfg(feature = "demo")]
     #[arg(long, value_enum)]
-    demo_language: Option<spotifast::i18n::Locale>,
+    demo_language: Option<jellifast::i18n::Locale>,
 
     /// Write a PNG of the demo window to this path and exit. Implies
     /// `--demo`. Without `--demo-size`, the shot is the window's own frame
@@ -228,7 +228,7 @@ fn run_control(control: Control) -> i32 {
             }
         }
         Err(error) => {
-            eprintln!("Spotifast is not running or does not support remote control: {error}");
+            eprintln!("Jellifast is not running or does not support remote control: {error}");
             return 1;
         }
     };
@@ -254,13 +254,13 @@ fn write_reply(out: &mut impl std::io::Write, text: &str) -> i32 {
 /// sandbox's app id, which Flatpak always sets in `FLATPAK_ID`.
 #[cfg(target_os = "linux")]
 fn desktop_entry() -> String {
-    fastframe_now_playing::desktop_entry("spotifast")
+    fastframe_now_playing::desktop_entry("jellifast")
 }
 
 #[cfg(target_os = "linux")]
 const PULSEAUDIO_PROPERTIES: [(&str, &str); 2] = [
-    ("PULSE_PROP_application.name", "Spotifast"),
-    ("PULSE_PROP_stream.description", "Spotify playback"),
+    ("PULSE_PROP_application.name", "Jellifast"),
+    ("PULSE_PROP_stream.description", "Jellyfin playback"),
 ];
 
 #[cfg(target_os = "linux")]
@@ -309,7 +309,7 @@ fn format_now_playing(snapshot: &str) -> String {
 }
 
 /// The `devices` snapshot as one line per device, the active one marked.
-/// The id comes first because `spotifast transfer` is what it is for.
+/// The id comes first because `jellifast transfer` is what it is for.
 fn format_devices(snapshot: &str) -> String {
     let Ok(devices) = serde_json::from_str::<Vec<serde_json::Value>>(snapshot) else {
         return String::new();
@@ -340,14 +340,14 @@ pub(crate) fn run() -> eframe::Result<()> {
     // First of all: `--apply-update <job>` makes this process the update
     // helper, which installs and exits; otherwise the receipt and error an
     // update relaunch carries are taken out of the arguments.
-    let launch = fastframe_update::intercept(&spotifast::updates::CONFIG);
+    let launch = fastframe_update::intercept(&jellifast::updates::CONFIG);
     // A MilkDrop child launch is a bare visualiser window, not the app: it has
     // its own event loop and OpenGL context, reads the sound from a shared
     // buffer, and never touches the app's state. Handle it before anything
     // else, including the argument parser, which does not know its flags.
     #[cfg(feature = "milkdrop")]
-    if let Some(args) = spotifast::milkdrop::child::Args::parse() {
-        std::process::exit(spotifast::milkdrop::child::run(args));
+    if let Some(args) = jellifast::milkdrop::child::Args::parse() {
+        std::process::exit(jellifast::milkdrop::child::run(args));
     }
 
     let cli = Cli::from_arg_matches(&Cli::command().get_matches_from(&launch.arguments))
@@ -359,7 +359,7 @@ pub(crate) fn run() -> eframe::Result<()> {
     let cli = if (cli.demo || cli.demo_shot.is_some()) && cli.demo_data.is_none() {
         Cli {
             demo_data: Some(
-                std::env::temp_dir().join(format!("spotifast-demo-{}", std::process::id())),
+                std::env::temp_dir().join(format!("jellifast-demo-{}", std::process::id())),
             ),
             ..cli
         }
@@ -376,10 +376,10 @@ pub(crate) fn run() -> eframe::Result<()> {
     let link = cli
         .link
         .as_deref()
-        .map(|text| match spotifast::link::parse(text) {
+        .map(|text| match jellifast::link::parse(text) {
             Some(uri) => uri,
             None => {
-                eprintln!("not a Spotify link: {text}");
+                eprintln!("not a Jellifast link: {text}");
                 std::process::exit(2);
             }
         });
@@ -401,7 +401,7 @@ pub(crate) fn run() -> eframe::Result<()> {
         match single_instance::acquire(&waker, link.as_deref()) {
             single_instance::Outcome::Only(guard) => Some(guard),
             single_instance::Outcome::Surfaced => {
-                log::info!("Spotifast is already running; asked it to show its window");
+                log::info!("Jellifast is already running; asked it to show its window");
                 return Ok(());
             }
         }
@@ -409,11 +409,11 @@ pub(crate) fn run() -> eframe::Result<()> {
         None
     };
     let default_filter = if cli.verbose {
-        "info,librespot=info,spotifast=debug"
+        "info,librespot=info,jellifast=debug"
     } else {
         // Which system face draws each script the interface font lacks,
         // one line per script at startup, for reports of odd-looking text.
-        "warn,spotifast=info,fastframe_fonts=info"
+        "warn,jellifast=info,fastframe_fonts=info"
     };
     let dirs = paths::AppDirs::discover();
     #[cfg(feature = "demo")]
@@ -430,7 +430,7 @@ pub(crate) fn run() -> eframe::Result<()> {
     // Launched from a desktop, stderr goes nowhere; keep the run's log where
     // a bug report can find it, and a line per panic in the panic log (with
     // any link in its message removed: a URL can carry a token).
-    if let Err(error) = fastframe_log::Logging::new("spotifast", env!("CARGO_PKG_VERSION"))
+    if let Err(error) = fastframe_log::Logging::new("jellifast", env!("CARGO_PKG_VERSION"))
         .filter(default_filter)
         .file(dirs.log_file())
         .panic_log(dirs.panic_log())
@@ -448,17 +448,17 @@ pub(crate) fn run() -> eframe::Result<()> {
     if let Some(name) = cli.device_name {
         settings.device_name = name;
     }
-    spotifast::window::set_custom_titlebar(settings.custom_titlebar);
+    jellifast::window::set_custom_titlebar(settings.custom_titlebar);
     // Colour emoji: the fonts are found off this thread. A demo capture
     // draws every picture in the frame that shows it.
     #[cfg(feature = "demo")]
-    spotifast::emoji::install(demo);
+    jellifast::emoji::install(demo);
     #[cfg(not(feature = "demo"))]
-    spotifast::emoji::install(false);
+    jellifast::emoji::install(false);
     // macOS delivers links as Apple Events; install before the event loop.
     #[cfg(target_os = "macos")]
     if let Some(guard) = &instance {
-        spotifast::mac_links::install(guard.commands(), waker.clone());
+        jellifast::mac_links::install(guard.commands(), waker.clone());
     }
 
     // A capture run is a throwaway process next to the real one: no tray
@@ -503,8 +503,8 @@ pub(crate) fn run() -> eframe::Result<()> {
     }
     #[cfg(feature = "demo")]
     if demo {
-        spotifast::demo::populate(&mut app);
-        spotifast::demo::apply_flags(&mut app, cli.demo_page.as_deref(), cli.demo_show.as_deref());
+        jellifast::demo::populate(&mut app);
+        jellifast::demo::apply_flags(&mut app, cli.demo_page.as_deref(), cli.demo_show.as_deref());
         if let Some(feed) = &cli.demo_update_feed {
             match fastframe_update::Source::local(feed) {
                 Ok(source) => app.update_source = source,
@@ -519,10 +519,10 @@ pub(crate) fn run() -> eframe::Result<()> {
                 app.update_restart_arguments
                     .extend(["--demo-data".into(), base.to_string_lossy().into_owned()]);
             }
-            app.actions.push(spotifast::model::Action::CheckForUpdates);
+            app.actions.push(jellifast::model::Action::CheckForUpdates);
         }
         if let Some(locale) = cli.demo_language {
-            app.settings.language = spotifast::settings::LanguageChoice::Locale(locale);
+            app.settings.language = jellifast::settings::LanguageChoice::Locale(locale);
             app.locale = locale;
         }
     }
@@ -539,7 +539,7 @@ pub(crate) fn run() -> eframe::Result<()> {
     #[cfg(feature = "demo")]
     let demo_inner = cli.demo_size;
     #[cfg(feature = "demo")]
-    spotifast::window::set_fixed_size(demo_inner.is_some());
+    jellifast::window::set_fixed_size(demo_inner.is_some());
     #[cfg(feature = "demo")]
     let demo_storage = app.dirs.cache.join("demo-window.ron");
     fastframe_shell::Shell::new(app, &waker)
@@ -572,7 +572,7 @@ pub(crate) fn run() -> eframe::Result<()> {
             #[cfg(target_os = "linux")]
             let hide_from_taskbar = options.viewport.taskbar == Some(false);
             eframe::run_native(
-                "Spotifast",
+                "Jellifast",
                 options,
                 Box::new(move |cc| {
                     if let Some(gl) = &cc.gl {
@@ -596,22 +596,22 @@ pub(crate) fn run() -> eframe::Result<()> {
                     // the next repaint.
                     #[cfg(target_os = "macos")]
                     {
-                        spotifast::mac_touchbar_crash_guard::install();
-                        spotifast::mac_menu::init();
+                        jellifast::mac_touchbar_crash_guard::install();
+                        jellifast::mac_menu::init();
                         let ctx = cc.egui_ctx.clone();
-                        spotifast::mac_menu::set_waker(move || ctx.request_repaint());
+                        jellifast::mac_menu::set_waker(move || ctx.request_repaint());
 
-                        spotifast::notch::init();
+                        jellifast::notch::init();
                         let ctx_notch = cc.egui_ctx.clone();
-                        spotifast::notch::set_waker(move || ctx_notch.request_repaint());
+                        jellifast::notch::set_waker(move || ctx_notch.request_repaint());
                     }
                     {
                         use raw_window_handle::HasDisplayHandle;
                         if let Ok(display) = cc.display_handle() {
                             app.window_level_supported =
-                                spotifast::window::supports_window_level(display.as_raw());
+                                jellifast::window::supports_window_level(display.as_raw());
                             app.taskbar_hiding_supported =
-                                spotifast::window::supports_hiding_from_taskbar(display.as_raw());
+                                jellifast::window::supports_hiding_from_taskbar(display.as_raw());
                         }
                     }
                     // winit hides a taskbar button on Windows only; X11 is
@@ -620,14 +620,14 @@ pub(crate) fn run() -> eframe::Result<()> {
                     if hide_from_taskbar {
                         use raw_window_handle::HasWindowHandle;
                         if let Ok(handle) = cc.window_handle() {
-                            spotifast::window::skip_x11_taskbar(handle.as_raw());
+                            jellifast::window::skip_x11_taskbar(handle.as_raw());
                         }
                     }
                     app.attach(&cc.egui_ctx);
                     #[cfg(windows)]
                     let thumbbar = {
                         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-                        let mut toolbar = spotifast::thumbbar::ThumbBar::new();
+                        let mut toolbar = jellifast::thumbbar::ThumbBar::new();
                         if thumbbar_enabled
                             && let Ok(handle) = cc.window_handle()
                             && let RawWindowHandle::Win32(window) = handle.as_raw()
@@ -669,7 +669,7 @@ struct MiniWindow {
 impl MiniWindow {
     fn wanted(app: &app::App) -> Option<Self> {
         app.settings.winamp_window.then(|| Self {
-            size: spotifast::ui::winamp::initial_size(&app.settings),
+            size: jellifast::ui::winamp::initial_size(&app.settings),
             position: app.winamp.restore_pos,
             on_top: app.settings.winamp_on_top,
             taskbar: app.settings.winamp_show_taskbar,
@@ -745,12 +745,12 @@ fn native_options(
     #[cfg(target_os = "linux")]
     let persistence_path = persistence_path.or_else(|| {
         // Keep the native profile path even when Flatpak supplies its app ID.
-        eframe::storage_dir("spotifast").map(|dir| dir.join("app.ron"))
+        eframe::storage_dir("jellifast").map(|dir| dir.join("app.ron"))
     });
     #[cfg(target_os = "linux")]
     let app_id = desktop_entry();
     #[cfg(not(target_os = "linux"))]
-    let app_id = "spotifast";
+    let app_id = "jellifast";
     let icon = if cfg!(target_os = "macos") {
         // macOS takes the dock icon from the bundle's .icns, which is the
         // 1024px drawing with the platform's rounding. Setting a window
@@ -760,7 +760,7 @@ fn native_options(
         app_icon()
     };
     let viewport = egui::ViewportBuilder::default()
-        .with_title("Spotifast")
+        .with_title("Jellifast")
         .with_app_id(app_id)
         .with_taskbar(true)
         .with_icon(icon);
@@ -799,9 +799,9 @@ fn native_options(
                 .with_title_shown(false)
                 // Windows has no equivalent to macOS's floating traffic lights.
                 // Removing its decorations lets the app surface fill the window.
-                .with_decorations(main_window_decorated(spotifast::window::custom_titlebar()))
+                .with_decorations(main_window_decorated(jellifast::window::custom_titlebar()))
                 .with_inner_size(size)
-                .with_min_inner_size(inner_size.unwrap_or(spotifast::window::MAIN_MIN_SIZE))
+                .with_min_inner_size(inner_size.unwrap_or(jellifast::window::MAIN_MIN_SIZE))
                 .with_fullscreen(fullscreen);
             if inner_size.is_some() {
                 viewport = viewport.with_max_inner_size(size);
@@ -819,7 +819,7 @@ fn native_options(
 
 fn profile_options(mut options: eframe::NativeOptions) -> eframe::NativeOptions {
     if options.persist_window {
-        options.persistence_path = eframe::storage_dir("spotifast").map(|dir| dir.join("app.ron"));
+        options.persistence_path = eframe::storage_dir("jellifast").map(|dir| dir.join("app.ron"));
     }
     options
 }
@@ -863,7 +863,7 @@ mod native_window_tests {
         let main = profile_options(native_options(false, None, None));
         assert_eq!(
             main.persistence_path,
-            eframe::storage_dir("spotifast").map(|dir| dir.join("app.ron"))
+            eframe::storage_dir("jellifast").map(|dir| dir.join("app.ron"))
         );
         let demo_path = std::path::PathBuf::from("temporary/demo.ron");
         let demo = profile_options(demo_native_options(
@@ -895,12 +895,12 @@ mod native_window_tests {
             assert_eq!(mini.viewport.app_id, main.viewport.app_id);
             assert_eq!(
                 main.persistence_path,
-                eframe::storage_dir("spotifast").map(|dir| dir.join("app.ron"))
+                eframe::storage_dir("jellifast").map(|dir| dir.join("app.ron"))
             );
         }
         #[cfg(not(target_os = "linux"))]
         {
-            assert_eq!(main.viewport.app_id.as_deref(), Some("spotifast"));
+            assert_eq!(main.viewport.app_id.as_deref(), Some("jellifast"));
             assert_eq!(mini.viewport.app_id, main.viewport.app_id);
             assert_eq!(main.persistence_path, None);
         }
@@ -926,7 +926,7 @@ mod native_window_tests {
                 skin_scale: Some(2),
                 ..Default::default()
             };
-            let size = spotifast::ui::winamp::initial_size(&settings);
+            let size = jellifast::ui::winamp::initial_size(&settings);
             let options = native_options(
                 false,
                 Some(MiniWindow {
@@ -956,7 +956,7 @@ mod native_window_tests {
         let options = native_options(false, None, None);
         assert_eq!(
             options.viewport.decorations,
-            Some(!spotifast::window::custom_titlebar())
+            Some(!jellifast::window::custom_titlebar())
         );
         assert_eq!(options.viewport.fullsize_content_view, Some(true));
         assert_eq!(options.viewport.titlebar_shown, Some(false));
@@ -1095,7 +1095,7 @@ struct Shell {
     /// after on_exit has returned the App to the event loop.
     persist_memory: bool,
     #[cfg(windows)]
-    thumbbar: spotifast::thumbbar::ThumbBar,
+    thumbbar: jellifast::thumbbar::ThumbBar,
     /// A pending `--demo-shot` capture, if this is a screenshot run.
     #[cfg(feature = "demo")]
     shot: Option<Shot>,
@@ -1225,9 +1225,9 @@ impl eframe::App for Shell {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let app = &mut *self.app;
         #[cfg(target_os = "macos")]
-        for command in spotifast::mac_menu::drain_commands() {
-            use spotifast::mac_menu::MenuCommand;
-            use spotifast::model::{Action, Dialog, Page};
+        for command in jellifast::mac_menu::drain_commands() {
+            use jellifast::mac_menu::MenuCommand;
+            use jellifast::model::{Action, Dialog, Page};
             let action = match command {
                 MenuCommand::PlayPause => Action::TogglePlay,
                 MenuCommand::Next => Action::Next,
@@ -1250,7 +1250,9 @@ impl eframe::App for Shell {
                 MenuCommand::Back => Action::Back,
                 MenuCommand::Forward => Action::Forward,
                 MenuCommand::OpenRepo => {
-                    ctx.open_url(egui::OpenUrl::new_tab("https://github.com/crmne/spotifast"));
+                    ctx.open_url(egui::OpenUrl::new_tab(
+                        "https://github.com/j4ckxyz/jellifast",
+                    ));
                     continue;
                 }
                 // Editing goes through egui, which owns the text field
@@ -1360,7 +1362,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             defaults,
-            [("PULSE_PROP_stream.description", "Spotify playback")]
+            [("PULSE_PROP_stream.description", "Jellyfin playback")]
         );
 
         assert_eq!(missing_pulseaudio_properties(|_| true).count(), 0);
@@ -1371,28 +1373,28 @@ mod tests {
     #[test]
     fn a_link_and_a_verb_are_told_apart() {
         // #given / #when / #then
-        let launch = Cli::try_parse_from(["spotifast", "spotify:track:4uLU6hMCjMI75M1A2tKUQC"])
+        let launch = Cli::try_parse_from(["jellifast", "jellyfin:track:4uLU6hMCjMI75M1A2tKUQC"])
             .expect("a link parses");
         assert_eq!(
             launch.link.as_deref(),
-            Some("spotify:track:4uLU6hMCjMI75M1A2tKUQC")
+            Some("jellyfin:track:4uLU6hMCjMI75M1A2tKUQC")
         );
         assert!(launch.control.is_none());
 
         let launch = Cli::try_parse_from([
-            "spotifast",
-            "https://open.spotify.com/album/1DFixLWuPkv3KT3TnV35m3?si=x",
+            "jellifast",
+            "jellifast://album/1DFixLWuPkv3KT3TnV35m3?si=x",
             "--verbose",
         ])
         .expect("a web address parses");
         assert!(launch.link.is_some());
         assert!(launch.verbose);
 
-        let verb = Cli::try_parse_from(["spotifast", "next"]).expect("a verb parses");
+        let verb = Cli::try_parse_from(["jellifast", "next"]).expect("a verb parses");
         assert!(matches!(verb.control, Some(Control::Next)));
         assert!(verb.link.is_none());
 
-        let bare = Cli::try_parse_from(["spotifast"]).expect("a plain launch parses");
+        let bare = Cli::try_parse_from(["jellifast"]).expect("a plain launch parses");
         assert!(bare.link.is_none() && bare.control.is_none());
     }
 }

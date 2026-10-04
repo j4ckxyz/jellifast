@@ -7,5 +7,5 @@ cd "$(dirname "$0")/../.."
 crate=$(cargo metadata --format-version 1 --locked |
     grep -o '"manifest_path":"[^"]*fastframe-i18n/Cargo.toml"' | head -n1 |
     sed 's/^"manifest_path":"//; s/Cargo.toml"$//')
-exec bash "$crate/scripts/update-translations.sh" --package Spotifast --domain spotifast \
-    --bugs 'https://github.com/crmne/spotifast/issues/new?template=translation.yml' --keyword gettext "$@"
+exec bash "$crate/scripts/update-translations.sh" --package Jellifast --domain jellifast \
+    --bugs 'https://github.com/j4ckxyz/jellifast/issues/new?template=translation.yml' --keyword gettext "$@"

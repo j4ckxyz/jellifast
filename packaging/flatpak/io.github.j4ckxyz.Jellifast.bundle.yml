@@ -1,0 +1,37 @@
+# The release workflow's Flatpak: the binary the Linux job built, packaged
+# into the same sandbox as io.github.j4ckxyz.Jellifast.yml describes. The
+# job unpacks the release tarball into built/ beside this file first.
+id: io.github.j4ckxyz.Jellifast
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: jellifast
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --socket=pulseaudio
+  - --share=network
+  # Platform storage for this application's sign-in.
+  - --talk-name=org.freedesktop.secrets
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --own-name=org.mpris.MediaPlayer2.jellifast
+  - --persist=.local/state
+modules:
+  - name: jellifast
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 jellifast /app/bin/jellifast
+      - install -Dm644 packaging/applications/*.desktop /app/share/applications/io.github.j4ckxyz.Jellifast.desktop
+      - sed -i 's/^Icon=.*$/Icon=io.github.j4ckxyz.Jellifast/;s/^StartupWMClass=jellifast$/StartupWMClass=io.github.j4ckxyz.Jellifast/' /app/share/applications/io.github.j4ckxyz.Jellifast.desktop
+      - install -Dm644 packaging/icons/*.svg /app/share/icons/hicolor/scalable/apps/io.github.j4ckxyz.Jellifast.svg
+      - install -Dm644 packaging/flatpak/io.github.j4ckxyz.Jellifast.metainfo.xml /app/share/metainfo/io.github.j4ckxyz.Jellifast.metainfo.xml
+      - install -Dm644 LICENSE /app/share/licenses/jellifast/LICENSE
+    sources:
+      - type: dir
+        path: built
+      # Metainfo belongs to this packaging checkout, not the portable archive.
+      - type: file
+        path: io.github.j4ckxyz.Jellifast.metainfo.xml
+        dest: packaging/flatpak

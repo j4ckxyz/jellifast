@@ -975,9 +975,9 @@ pub fn item_menu(
         ui,
         &palette,
         Some(Icon::ExternalLink),
-        &gettext(locale, "Open in Spotify"),
+        &gettext(locale, "Open in Jellyfin"),
     ) {
-        app.actions.push(Action::OpenInSpotify(uri));
+        app.actions.push(Action::OpenInJellyfin(uri));
     }
 }
 
@@ -1026,10 +1026,8 @@ pub fn context_menu_items(
     }
     let saved = app.is_saved(uri).unwrap_or(false);
     let (icon, text) = match (kind, saved) {
-        ("artist", true) => (Icon::CircleX, pgettext(locale, "artist", "Unfollow")),
-        ("artist", false) => (Icon::CirclePlus, pgettext(locale, "artist", "Follow")),
-        (_, true) => (Icon::CircleX, gettext(locale, "Remove from Your Library")),
-        (_, false) => (Icon::CirclePlus, gettext(locale, "Add to Your Library")),
+        (_, true) => (Icon::CircleX, gettext(locale, "Remove from favorites")),
+        (_, false) => (Icon::CirclePlus, gettext(locale, "Add to favorites")),
     };
     if owned_playlist.is_none() && menu_item(ui, &palette, Some(icon), &text) {
         app.actions.push(Action::ToggleSaved(uri.to_string()));
@@ -1087,9 +1085,9 @@ pub fn context_menu_items(
         ui,
         &palette,
         Some(Icon::ExternalLink),
-        &gettext(locale, "Open in Spotify"),
+        &gettext(locale, "Open in Jellyfin"),
     ) {
-        app.actions.push(Action::OpenInSpotify(uri.to_string()));
+        app.actions.push(Action::OpenInJellyfin(uri.to_string()));
     }
 }
 
@@ -1097,7 +1095,7 @@ pub fn context_menu_items(
 /// remains playable, while local files and missing entries cannot be requested.
 pub(crate) fn row_playable(item: &PlayableItem) -> bool {
     !item.uri().is_empty()
-        && !item.uri().starts_with("spotify:local:")
+        && !item.uri().starts_with("jellyfin:local:")
         && !matches!(item, PlayableItem::Track(track)
             if track.is_local || track.is_playable == Some(false))
 }
@@ -3110,10 +3108,9 @@ pub fn proxy_scope_note(
             locale,
             "Proxy login applies to Web requests. Local playback uses this proxy only without a login.",
         ),
-        crate::settings::ProxyMode::Socks => gettext(
-            locale,
-            "Spotify hostnames are resolved by the proxy. Local playback connects directly.",
-        ),
+        crate::settings::ProxyMode::Socks => {
+            gettext(locale, "Host names are resolved by the proxy.")
+        }
         crate::settings::ProxyMode::Off | crate::settings::ProxyMode::System => return,
     };
     ui.add(
@@ -3390,7 +3387,7 @@ mod tests {
 
     fn test_app() -> App {
         let root = std::env::temp_dir().join(format!(
-            "spotifast-virtual-{}-{}",
+            "jellifast-virtual-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -3694,7 +3691,7 @@ mod tests {
                 let ctx = egui::Context::default();
                 theme::install(&ctx);
                 theme::apply(&ctx, &palette);
-                let item = song("spotify:track:selected");
+                let item = song("jellyfin:track:selected");
                 let context = RowContext::Queue;
                 let mut rect = Rect::NOTHING;
                 let mut id = egui::Id::NULL;
@@ -3785,8 +3782,8 @@ mod tests {
 
     #[test]
     fn dragging_a_picked_row_carries_the_whole_selection() {
-        let first = song("spotify:track:first");
-        let second = song("spotify:track:second");
+        let first = song("jellyfin:track:first");
+        let second = song("jellyfin:track:second");
         let dragged = dragged_items(&second, true, &[first.clone(), second.clone()]);
         assert_eq!(
             dragged.iter().map(PlayableItem::uri).collect::<Vec<_>>(),

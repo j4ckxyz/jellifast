@@ -34,27 +34,6 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         .show(ctx, |ui| {
             ui.set_width(420.0);
             match dialog {
-                Dialog::PersonalAppIntro => {
-                    theme::text(ui, gettext(locale, "Spend less time waiting for Spotify"), theme::bold(20.0), palette.text);
-                    ui.add_space(12.0);
-                    for text in [
-                        gettext(locale, "Spotifast's default connection shares Spotify's request limit with other listeners. When it gets busy, loading music and using playback controls can take longer."),
-                        gettext(locale, "Your Premium account lets you create a free personal Spotify app. Connect it here to give supported requests your own allowance. Some pages still use the shared connection."),
-                        gettext(locale, "Setup takes a few minutes. You can also find it later in Settings under Personal Spotify app."),
-                    ] {
-                        ui.add(egui::Label::new(egui::RichText::new(text).font(theme::regular(14.0)).color(palette.secondary)).wrap());
-                        ui.add_space(10.0);
-                    }
-                    ui.add_space(8.0);
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if theme::pill_button(ui, &palette, &gettext(locale, "Set up personal app"), true).clicked() {
-                            app.actions.push(Action::OpenPersonalAppSetup);
-                        }
-                        if theme::pill_button(ui, &palette, &gettext(locale, "Keep shared app"), false).clicked() {
-                            app.actions.push(Action::CloseDialog);
-                        }
-                    });
-                }
                 Dialog::CreatePlaylist { .. } => create_playlist(app, ui),
                 Dialog::EditPlaylist { .. } => edit_playlist(app, ui),
                 Dialog::ConfirmDeletePlaylist { id, name, owned } => {
@@ -71,7 +50,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     ui.add_space(8.0);
                     let body = if owned {
                         // Translators: {name} is a playlist name.
-                        gettext(locale, "Delete “{name}”? You can recover it from Spotify for 90 days.")
+                        gettext(
+                            locale,
+                            "Delete “{name}” from the server? This cannot be undone.",
+                        )
                     } else {
                         // Translators: {name} is a playlist name.
                         gettext(locale, "“{name}” will no longer appear in Your Library.")
@@ -101,7 +83,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         {
                             app.actions.push(Action::DeletePlaylist(id.clone()));
                         }
-                        if theme::pill_button(ui, &palette, &gettext(locale, "Cancel"), false).clicked() {
+                        if theme::pill_button(ui, &palette, &gettext(locale, "Cancel"), false)
+                            .clicked()
+                        {
                             app.actions.push(Action::CloseDialog);
                         }
                     });
@@ -136,7 +120,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     );
                     ui.add_space(20.0);
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if theme::pill_button(ui, &palette, &gettext(locale, "Add anyway"), true).clicked() {
+                        if theme::pill_button(ui, &palette, &gettext(locale, "Add anyway"), true)
+                            .clicked()
+                        {
                             app.actions.push(Action::ConfirmAddToPlaylist {
                                 playlist_id: playlist_id.clone(),
                                 playlist_name: playlist_name.clone(),
@@ -144,13 +130,20 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                                 position,
                             });
                         }
-                        if theme::pill_button(ui, &palette, &gettext(locale, "Cancel"), false).clicked() {
+                        if theme::pill_button(ui, &palette, &gettext(locale, "Cancel"), false)
+                            .clicked()
+                        {
                             app.actions.push(Action::CloseDialog);
                         }
                     });
                 }
                 Dialog::Shortcuts => {
-                    theme::text(ui, gettext(locale, "Keyboard shortcuts"), theme::bold(20.0), palette.text);
+                    theme::text(
+                        ui,
+                        gettext(locale, "Keyboard shortcuts"),
+                        theme::bold(20.0),
+                        palette.text,
+                    );
                     ui.add_space(12.0);
                     // `theme::text` truncates, which in a grid makes each cell
                     // claim almost no width and turns "Ctrl+Shift+A" into
@@ -170,8 +163,8 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     crate::autoscroll::show(
                         ui,
                         egui::ScrollArea::vertical()
-                        .max_height(room.max(120.0))
-                        .auto_shrink([false, true]),
+                            .max_height(room.max(120.0))
+                            .auto_shrink([false, true]),
                         egui::Vec2b::new(false, true),
                         |ui| {
                             egui::Grid::new("shortcuts")
@@ -193,33 +186,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     );
                     ui.add_space(16.0);
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if theme::pill_button(ui, &palette, &gettext(locale, "Done"), true).clicked() {
-                            app.actions.push(Action::CloseDialog);
-                        }
-                    });
-                }
-                Dialog::PremiumNeeded => {
-                    theme::text(
-                        ui,
-                        gettext(locale, "This account cannot play music here"),
-                        theme::bold(20.0),
-                        palette.text,
-                    );
-                    ui.add_space(8.0);
-                    ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(gettext(
-                                locale,
-                                "Playback needs Spotify Premium. Free accounts can browse and search, but cannot play music through Spotifast.",
-                            ))
-                            .font(theme::regular(14.0))
-                            .color(palette.secondary),
-                        )
-                        .wrap(),
-                    );
-                    ui.add_space(20.0);
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if theme::pill_button(ui, &palette, &gettext(locale, "OK"), true).clicked() {
+                        if theme::pill_button(ui, &palette, &gettext(locale, "Done"), true)
+                            .clicked()
+                        {
                             app.actions.push(Action::CloseDialog);
                         }
                     });
@@ -615,12 +584,12 @@ mod tests {
 
     #[test]
     fn duplicate_dialog_names_the_song() {
-        let items = vec![song("spotify:track:honey", "Honey")];
+        let items = vec![song("jellyfin:track:honey", "Honey")];
         let message = duplicate_message(
             Locale::English,
             "The best music ever",
             &items,
-            &["spotify:track:honey".into()],
+            &["jellyfin:track:honey".into()],
         );
 
         assert_eq!(
@@ -632,14 +601,14 @@ mod tests {
     #[test]
     fn duplicate_dialog_names_only_the_duplicates_in_a_selection() {
         let items = vec![
-            song("spotify:track:honey", "Honey"),
-            song("spotify:track:new", "New song"),
+            song("jellyfin:track:honey", "Honey"),
+            song("jellyfin:track:new", "New song"),
         ];
         let message = duplicate_message(
             Locale::English,
             "The best music ever",
             &items,
-            &["spotify:track:honey".into()],
+            &["jellyfin:track:honey".into()],
         );
 
         assert_eq!(

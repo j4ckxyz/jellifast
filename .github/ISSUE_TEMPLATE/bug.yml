@@ -5,17 +5,17 @@ body:
   - type: markdown
     attributes:
       value: |
-        Please include the log from Spotifast's last run:
+        Please include the log from Jellifast's last run:
 
-        - Linux: `~/.local/state/spotifast/spotifast.log`
-        - macOS: `~/Library/Application\ Support/me.paolino.spotifast/spotifast.log`
-        - Windows: `%LOCALAPPDATA%\paolino\spotifast\data\spotifast.log`
+        - Linux: `~/.local/state/jellifast/jellifast.log`
+        - macOS: `~/Library/Application\ Support/io.github.j4ckxyz.jellifast/jellifast.log`
+        - Windows: `%LOCALAPPDATA%\j4ckxyz\jellifast\data\jellifast.log`
 
         If the app crashed or vanished, include `panic.log` from the same folder.
   - type: input
     id: version
     attributes:
-      label: Spotifast version and how you installed it
+      label: Jellifast version and how you installed it
       placeholder: "0.5.0-rc1 from the AUR / the DMG / the Windows installer / Homebrew / the Flatpak bundle"
     validations:
       required: true
@@ -37,13 +37,11 @@ body:
       placeholder: "Arch, Hyprland, PipeWire / macOS 15.6 / Windows 11 24H2"
     validations:
       required: true
-  - type: dropdown
-    id: plan
+  - type: input
+    id: server
     attributes:
-      label: Spotify plan
-      options:
-        - Premium
-        - Free
+      label: Jellyfin server version
+      description: Dashboard, then General. For example 10.10.7.
     validations:
       required: true
   - type: textarea
@@ -56,7 +54,7 @@ body:
   - type: textarea
     id: log
     attributes:
-      label: spotifast.log
+      label: jellifast.log
       description: Reproduce the problem, quit the app, then paste the whole file here (and panic.log, if there is one). Paths are above.
       render: text
     validations:

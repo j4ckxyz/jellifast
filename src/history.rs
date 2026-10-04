@@ -1,6 +1,6 @@
 //! Local play history.
 //!
-//! Spotify does not record playback from librespot clients. Spotifast stores
+//! Spotify does not record playback from librespot clients. Jellifast stores
 //! local plays and merges them with `/me/player/recently-played`, which covers
 //! other devices. A track counts only after enough listening time, so skips do
 //! not fill the history.
@@ -224,18 +224,18 @@ mod tests {
     #[test]
     fn the_two_histories_interleave_by_time() {
         let local = vec![
-            play("spotify:track:here-late", "2026-09-01T15:00:00Z"),
-            play("spotify:track:here-early", "2026-09-01T09:00:00Z"),
+            play("jellyfin:track:here-late", "2026-09-01T15:00:00Z"),
+            play("jellyfin:track:here-early", "2026-09-01T09:00:00Z"),
         ];
-        let remote = vec![play("spotify:track:phone", "2026-09-01T12:00:00Z")];
+        let remote = vec![play("jellyfin:track:phone", "2026-09-01T12:00:00Z")];
         let rows = merged(&local, &remote);
         let uris: Vec<&str> = rows.iter().map(|play| play.track.uri.as_str()).collect();
         assert_eq!(
             uris,
             vec![
-                "spotify:track:here-late",
-                "spotify:track:phone",
-                "spotify:track:here-early"
+                "jellyfin:track:here-late",
+                "jellyfin:track:phone",
+                "jellyfin:track:here-early"
             ]
         );
     }
@@ -244,8 +244,8 @@ mod tests {
     #[test]
     fn the_same_song_played_twice_is_two_rows() {
         let local = vec![
-            play("spotify:track:a", "2026-09-01T15:00:00Z"),
-            play("spotify:track:a", "2026-09-01T09:00:00Z"),
+            play("jellyfin:track:a", "2026-09-01T15:00:00Z"),
+            play("jellyfin:track:a", "2026-09-01T09:00:00Z"),
         ];
         assert_eq!(merged(&local, &[]).len(), 2);
     }
@@ -253,10 +253,10 @@ mod tests {
     /// A play reported by both sources appears once.
     #[test]
     fn one_play_seen_twice_is_one_row() {
-        let local = vec![play("spotify:track:a", "2026-09-01T15:00:00Z")];
-        let remote = vec![play("spotify:track:a", "2026-09-01T15:00:20Z")];
+        let local = vec![play("jellyfin:track:a", "2026-09-01T15:00:00Z")];
+        let remote = vec![play("jellyfin:track:a", "2026-09-01T15:00:20Z")];
         assert_eq!(merged(&local, &remote).len(), 1, "twenty seconds apart");
-        let distant = vec![play("spotify:track:a", "2026-09-01T15:05:00Z")];
+        let distant = vec![play("jellyfin:track:a", "2026-09-01T15:05:00Z")];
         assert_eq!(merged(&local, &distant).len(), 2, "five minutes apart");
     }
 
@@ -267,16 +267,16 @@ mod tests {
     fn a_short_song_played_twice_by_one_source_is_two_rows() {
         // A forty-second interlude played twice, on another device.
         let remote = vec![
-            play("spotify:track:short", "2026-09-01T15:00:40Z"),
-            play("spotify:track:short", "2026-09-01T15:00:00Z"),
+            play("jellyfin:track:short", "2026-09-01T15:00:40Z"),
+            play("jellyfin:track:short", "2026-09-01T15:00:00Z"),
         ];
         assert_eq!(merged(&[], &remote).len(), 2, "two plays on another device");
         // The same two plays, made here.
         assert_eq!(merged(&remote, &[]).len(), 2, "two plays on this computer");
         // Made here and reported by Spotify as well: two plays, each once.
         let reported = vec![
-            play("spotify:track:short", "2026-09-01T15:00:45Z"),
-            play("spotify:track:short", "2026-09-01T15:00:05Z"),
+            play("jellyfin:track:short", "2026-09-01T15:00:45Z"),
+            play("jellyfin:track:short", "2026-09-01T15:00:05Z"),
         ];
         assert_eq!(merged(&remote, &reported).len(), 2, "each play once");
     }
@@ -284,12 +284,12 @@ mod tests {
     /// A play without a timestamp sorts to the end.
     #[test]
     fn a_play_with_no_time_sinks_to_the_end() {
-        let mut timeless = play("spotify:track:timeless", "");
+        let mut timeless = play("jellyfin:track:timeless", "");
         timeless.played_at = None;
-        let local = vec![timeless, play("spotify:track:a", "2026-09-01T09:00:00Z")];
+        let local = vec![timeless, play("jellyfin:track:a", "2026-09-01T09:00:00Z")];
         let rows = merged(&local, &[]);
         let uris: Vec<&str> = rows.iter().map(|play| play.track.uri.as_str()).collect();
-        assert_eq!(uris, vec!["spotify:track:a", "spotify:track:timeless"]);
+        assert_eq!(uris, vec!["jellyfin:track:a", "jellyfin:track:timeless"]);
     }
 
     /// The newest play comes first and the list is capped.
@@ -300,7 +300,7 @@ mod tests {
         for index in 0..KEPT + 10 {
             history.record(
                 Track {
-                    uri: format!("spotify:track:{index}"),
+                    uri: format!("jellyfin:track:{index}"),
                     ..Track::default()
                 },
                 at,
@@ -309,7 +309,7 @@ mod tests {
         assert_eq!(history.plays().len(), KEPT, "the oldest fall off the end");
         assert_eq!(
             history.plays()[0].track.uri,
-            format!("spotify:track:{}", KEPT + 9),
+            format!("jellyfin:track:{}", KEPT + 9),
             "the newest is first"
         );
     }

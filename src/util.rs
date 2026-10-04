@@ -164,7 +164,7 @@ pub fn format_relative_date(locale: Locale, iso: &str, now: jiff::Timestamp) -> 
     text.replace("{count}", &count.to_string())
 }
 
-/// Tears the id out of `spotify:track:abc` and friends.
+/// Tears the id out of `jellyfin:track:abc` and friends.
 pub fn uri_id(uri: &str) -> Option<&str> {
     uri.rsplit(':').next().filter(|id| !id.is_empty())
 }
@@ -179,21 +179,26 @@ pub fn uri_kind(uri: &str) -> Option<&str> {
 pub fn station_uri(seed: &str) -> Option<String> {
     let kind = uri_kind(seed)?;
     let id = uri_id(seed)?;
-    (seed == format!("spotify:{kind}:{id}")
+    (seed == format!("jellyfin:{kind}:{id}")
         && matches!(kind, "track" | "playlist" | "album" | "artist"))
-    .then(|| format!("spotify:station:{kind}:{id}"))
+    .then(|| format!("jellyfin:station:{kind}:{id}"))
 }
 
 /// The song, playlist, album, or artist a radio station is seeded by.
 pub fn station_seed(station: &str) -> Option<String> {
-    let seed = format!("spotify:{}", station.strip_prefix("spotify:station:")?);
+    let seed = format!("jellyfin:{}", station.strip_prefix("jellyfin:station:")?);
     station_uri(&seed).is_some().then_some(seed)
 }
 
-pub fn open_spotify_url(uri: &str) -> Option<String> {
-    let kind = uri_kind(uri)?;
+/// The page of a song, album, artist or playlist in the server's own web
+/// interface.
+pub fn web_url(server: &str, uri: &str) -> Option<String> {
+    let server = server.trim().trim_end_matches('/');
+    if server.is_empty() || !matches!(uri_kind(uri)?, "track" | "album" | "artist" | "playlist") {
+        return None;
+    }
     let id = uri_id(uri)?;
-    Some(format!("https://open.spotify.com/{kind}/{id}"))
+    Some(format!("{server}/web/#/details?id={id}"))
 }
 
 /// The menu-bar shape for macOS: the circle with the play triangle punched
@@ -248,7 +253,7 @@ fn triangle_distance(p: (f32, f32), a: (f32, f32), b: (f32, f32), c: (f32, f32))
     if inside { 0.0 } else { d1.min(d2).min(d3) }
 }
 
-/// The mark on a 128-unit square, as `packaging/icons/spotifast.svg` draws
+/// The mark on a 128-unit square, as `packaging/icons/jellifast.svg` draws
 /// it: a disc of radius 62 and a play triangle with corners rounded by 5,
 /// set a little left of its box so it looks centred. `polished` adds the
 /// darker rim, the lit face and the bright edge between them.
@@ -425,24 +430,24 @@ mod tests {
     #[test]
     fn radio_stations_map_to_their_seeds_and_back() {
         for kind in ["track", "playlist", "album", "artist"] {
-            let seed = format!("spotify:{kind}:4uLU6hMCjMI75M1A2tKUQC");
+            let seed = format!("jellyfin:{kind}:4uLU6hMCjMI75M1A2tKUQC");
             let station = station_uri(&seed).expect("a station");
             assert_eq!(
                 station,
-                format!("spotify:station:{kind}:4uLU6hMCjMI75M1A2tKUQC")
+                format!("jellyfin:station:{kind}:4uLU6hMCjMI75M1A2tKUQC")
             );
             assert_eq!(station_seed(&station).as_deref(), Some(seed.as_str()));
         }
         for seed in [
-            "spotify:show:abc",
-            "spotify:episode:abc",
-            "spotify:user:me:collection",
-            "spotify:track:",
+            "jellyfin:show:abc",
+            "jellyfin:episode:abc",
+            "jellyfin:user:me:collection",
+            "jellyfin:track:",
             "track:abc",
         ] {
             assert_eq!(station_uri(seed), None, "{seed}");
         }
-        assert_eq!(station_seed("spotify:playlist:abc"), None);
+        assert_eq!(station_seed("jellyfin:playlist:abc"), None);
     }
 
     #[test]
@@ -546,11 +551,16 @@ mod tests {
 
     #[test]
     fn uris() {
-        assert_eq!(uri_id("spotify:track:abc"), Some("abc"));
-        assert_eq!(uri_kind("spotify:playlist:x"), Some("playlist"));
+        assert_eq!(uri_id("jellyfin:track:abc"), Some("abc"));
+        assert_eq!(uri_kind("jellyfin:playlist:x"), Some("playlist"));
         assert_eq!(
-            open_spotify_url("spotify:album:z").as_deref(),
-            Some("https://open.spotify.com/album/z")
+            web_url("https://music.example.org/", "jellyfin:album:z").as_deref(),
+            Some("https://music.example.org/web/#/details?id=z")
+        );
+        assert_eq!(web_url("", "jellyfin:album:z"), None, "signed out");
+        assert_eq!(
+            web_url("https://music.example.org", "jellyfin:user:me:collection"),
+            None
         );
     }
 

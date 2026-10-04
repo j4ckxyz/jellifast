@@ -1,22 +1,22 @@
 [package]
-name = "spotifast"
-default-run = "spotifast"
-version = "0.12.0"
+name = "jellifast"
+default-run = "jellifast"
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.98"
 license = "MIT"
-description = "A native Spotify client"
-repository = "https://github.com/crmne/spotifast"
-keywords = ["spotify", "music", "egui", "librespot", "player"]
+description = "A native Jellyfin music client"
+repository = "https://github.com/j4ckxyz/jellifast"
+keywords = ["jellyfin", "music", "egui", "player"]
 categories = ["multimedia::audio"]
 
 [lib]
-name = "spotifast"
+name = "jellifast"
 path = "src/lib.rs"
 
 [[bin]]
-name = "spotifast"
-path = "src/spotifast.rs"
+name = "jellifast"
+path = "src/jellifast.rs"
 
 [dependencies]
 anyhow = "1"
@@ -27,7 +27,7 @@ serde_json = "1"
 log = "0.4"
 directories = "6"
 # One protected-store API, with only each target's native provider below.
-# Durable Spotify grants must not be copied into ordinary state JSON.
+# The Jellyfin access token must not be copied into ordinary state JSON.
 keyring-core = "1"
 # The whole UI. glow keeps the binary and the dependency tree small; wgpu is
 # not needed for a 2D music client.
@@ -35,8 +35,7 @@ keyring-core = "1"
 eframe = { version = "0.36", default-features = false, features = ["accesskit", "glow", "default_fonts", "links", "wayland", "x11", "persistence"] }
 egui = "0.36"
 egui_extras = { version = "0.36", features = ["image", "svg"] }
-# The shared foundation of Spotifast, ZapFast, RekordFlash and TonePush
-# (crmne/fastframe). Every crate comes from the same revision; move them
+# crmne/fastframe, the foundation crates this app is built on. Every crate comes from the same revision; move them
 # together.
 fastframe-text = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-fonts = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
@@ -61,10 +60,8 @@ fastframe-shell = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-macos = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 # Self-update from GitHub releases, on the reqwest client below.
 fastframe-update = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1", features = ["reqwest"] }
-# The audio device stream: it pauses, so a paused player costs no CPU (#636),
-# follows the default output and reopens after a failure. Its cpal 0.18
-# cannot share a build with the cpal 0.16 of librespot's rodio backend (both
-# link ALSA), so that backend is left out.
+# The audio device stream: it pauses, so a paused player costs no CPU,
+# follows the default output and reopens after a failure.
 fastframe-audio = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 # The wheel step, the Linux touchpad scale and glide, and the axis a scroll
 # gesture holds.
@@ -106,34 +103,17 @@ glutin-winit = { version = "0.5", optional = true }
 # Detect the live window backend, including when MilkDrop is disabled.
 # eframe already compiles this crate.
 raw-window-handle = "0.6"
-# Spotify playback and Connect. rustls everywhere so the client links one TLS
-# stack and builds without OpenSSL on every platform.
-#
-# librespot-core depends on hyper-proxy2 for HTTP proxy support. The
-# published 0.1.0 release pins rustls 0.22 / rustls-webpki 0.102; we patch
-# it (see [patch.crates-io]) onto rustls 0.23 so CONNECT-then-TLS uses the
-# same stack as the rest of the client. SOCKS5 still covers the Web API but
-# not the engine: librespot only speaks HTTP CONNECT.
-librespot-core = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
-librespot-playback = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
-librespot-connect = { version = "0.8", default-features = false }
-librespot-metadata = { version = "0.8", default-features = false }
-librespot-protocol = { version = "0.8", default-features = false }
-# Parses the rootlist's playlist4 protobuf, the same crate librespot generates with.
-protobuf = "3"
-# Local playback's audio sink is this crate's own (src/sink.rs): librespot's
-# rodio backend unwraps the device open on the player thread, and a release
-# build aborts on panic, so it is left out. rodio supplies the mixer and the
-# queue only; fastframe-audio below owns the device stream.
+# Decoding what the Jellyfin server streams (src/player.rs): the original
+# file when the format is one of these, the server's MP3 transcode otherwise.
+symphonia = { version = "0.5", default-features = false, features = ["aac", "alac", "flac", "isomp4", "mp3", "ogg", "pcm", "vorbis", "wav", "aiff"] }
+# The output's mixer and queue only (src/sink.rs); fastframe-audio owns the
+# device stream.
 rodio = { version = "0.21", default-features = false }
-# `socks` is SOCKS5 proxy support for the Web API, artwork, lyrics, and
-# update checks. HTTP proxies work without it. `system-proxy` reads the OS
+# `socks` is SOCKS5 proxy support for the Jellyfin server, artwork, lyrics,
+# and update checks. HTTP proxies work without it. `system-proxy` reads the OS
 # proxy on macOS and Windows when the mode is System; Linux uses environment
 # variables either way.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "json", "gzip", "http2", "blocking", "socks", "system-proxy"] }
-# Same System-proxy matcher reqwest uses, so local playback follows the same
-# HTTP proxy (environment, and the OS proxy on macOS and Windows).
-hyper-util = { version = "0.1", default-features = false, features = ["client-proxy", "client-proxy-system"] }
 http = "1"
 # `fs` is used by the playlist cache in `backend.rs`. On Linux the MPRIS
 # dependency happens to turn it on, which is why leaving it out built
@@ -147,14 +127,8 @@ rfd = "0.17.2"
 rand = "0.9"
 open = "5"
 percent-encoding = "2"
-urlencoding = "2"
 jiff = "0.2"
-mdns-sd = "0.21"
 unicode-bidi = "0.3"
-hmac = "0.12"
-pbkdf2 = "0.12"
-aes = "0.8"
-ctr = "0.9"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1.0.2", features = ["keychain"] }
@@ -163,7 +137,7 @@ apple-native-keyring-store = { version = "1.0.2", features = ["keychain"] }
 # exception instead of letting it abort the process.
 objc2 = { version = "0.6", features = ["exception"] }
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSEvent", "NSMenu", "NSMenuItem", "NSResponder", "NSRunningApplication", "NSWindow", "NSView", "NSScreen", "NSColor", "NSImage", "NSImageView", "NSButton", "NSControl", "NSTrackingArea", "NSVisualEffectView", "NSTextField", "NSBezierPath", "NSFont", "NSAnimation", "NSAnimationContext"] }
-# NSAppleEventManager and NSAppleEventDescriptor carry the Spotify links
+# NSAppleEventManager and NSAppleEventDescriptor carry the jellifast: links
 # macOS hands an app registered for the scheme (src/mac_links.rs), and
 # NSRunLoop has the delayed perform the title bar uses (src/window.rs).
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSAppleEventDescriptor", "NSAppleEventManager", "NSDate", "NSObjCRuntime", "NSRunLoop", "NSString", "NSThread", "NSDictionary", "NSAttributedString", "NSData"] }
@@ -176,7 +150,6 @@ windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Globali
 [target.'cfg(target_os = "linux")'.dependencies]
 # Reuses the zbus/Tokio stack already used for desktop integration.
 zbus-secret-service-keyring-store = { version = "1.0.1", features = ["rt-tokio-crypto-rust"] }
-librespot-playback = { version = "0.8", default-features = false, features = ["pulseaudio-backend", "rustls-tls-native-roots"] }
 # The session bus, for the desktop's light or dark preference
 # (src/appearance.rs). fastframe-now-playing's MPRIS already compiles this
 # version.
@@ -257,7 +230,7 @@ epaint_default_fonts = { git = "https://github.com/crmne/egui", rev = "ba6790fe7
 # crmne/winit apps-0.30, shared with the same apps: winit 0.30.13 plus Wayland
 # `Occluded` for the xdg-shell suspended state with commits on the app's behalf
 # while it isn't presenting (rust-windowing/winit#4709, #4710), macOS Quit
-# through close requests behind a feature Spotifast leaves off (winit#4692),
+# through close requests behind a feature Jellifast leaves off (winit#4692),
 # a macOS window ordered out and flushed before it closes, so a Touch Bar
 # cannot leave a ghost window behind (winit#4728), and file drag and drop on Wayland through the one data device egui's
 # clipboard also uses, since Hyprland gives the clipboard and drags only to an
@@ -269,24 +242,3 @@ winit = { git = "https://github.com/crmne/winit", rev = "ed7caa9023f10b397f5b6ec
 # which GitHub's windows-latest images no longer carry; the fork lets an
 # explicit CMAKE_GENERATOR win. Drop when upstream takes the change.
 projectm-sys = { git = "https://github.com/crmne/projectm-rs", branch = "respect-cmake-generator" }
-# hyper-proxy2's unreleased rustls 0.23 update plus our upstream provider
-# compatibility fix. Drop this fork when a release includes both changes.
-hyper-proxy2 = { git = "https://github.com/crmne/hyper-proxy2", rev = "efca4811371ddae81c06be168de54194938d70b1" }
-# librespot 0.8.0 plus the small patches Spotifast needs: queue controls,
-# normalisation-factor reporting for the visualisers, and a distinct event
-# when Spotify refuses an audio key, bounded socket setup with DNS address
-# fallback, an in-memory credential cache for platform storage, full
-# playback-state recovery after a session disconnect, the desktop platform
-# signature for Windows on ARM, and a volume set while the device is inactive.
-# Recovery is proposed upstream in librespot-org/librespot#1765 and the
-# volume in librespot-org/librespot#1770; the ARM signature answers
-# librespot-org/librespot#1737.
-# Every librespot crate comes from the
-# fork so one copy exists. Drop patches as upstream takes them.
-librespot-audio = { git = "https://github.com/crmne/librespot", rev = "23fc42cff37848e51f0d8eaefad1a93941b71e59" }
-librespot-connect = { git = "https://github.com/crmne/librespot", rev = "23fc42cff37848e51f0d8eaefad1a93941b71e59" }
-librespot-core = { git = "https://github.com/crmne/librespot", rev = "23fc42cff37848e51f0d8eaefad1a93941b71e59" }
-librespot-metadata = { git = "https://github.com/crmne/librespot", rev = "23fc42cff37848e51f0d8eaefad1a93941b71e59" }
-librespot-oauth = { git = "https://github.com/crmne/librespot", rev = "23fc42cff37848e51f0d8eaefad1a93941b71e59" }
-librespot-playback = { git = "https://github.com/crmne/librespot", rev = "23fc42cff37848e51f0d8eaefad1a93941b71e59" }
-librespot-protocol = { git = "https://github.com/crmne/librespot", rev = "23fc42cff37848e51f0d8eaefad1a93941b71e59" }

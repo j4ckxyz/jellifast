@@ -11,23 +11,23 @@ libraries:
     deb: libasound2t64
     rpm: alsa-lib
 nfpm:
-  name: spotifast
-  maintainer: Carmine Paolino <carmine@paolino.me>
-  homepage: https://github.com/crmne/spotifast
-  description: A native Spotify client
+  name: jellifast
+  maintainer: j4ckxyz <j4ckxyz@users.noreply.github.com>
+  homepage: https://github.com/j4ckxyz/jellifast
+  description: A native music player for Jellyfin
   license: MIT
   contents:
   # A glob source makes nFPM append its basename to the destination directory.
-  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/spotifast"
+  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/jellifast"
     dst: "/usr/bin/"
     file_info:
       mode: 493
   - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/LICENSE"
-    dst: "/usr/share/licenses/spotifast/"
+    dst: "/usr/share/licenses/jellifast/"
     file_info:
       mode: 420
   - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/README.md"
-    dst: "/usr/share/doc/spotifast/"
+    dst: "/usr/share/doc/jellifast/"
     file_info:
       mode: 420
   - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/packaging/applications/*.desktop"
@@ -38,12 +38,12 @@ nfpm:
     dst: "/usr/share/icons/hicolor/scalable/apps/"
     file_info:
       mode: 420
-  - src: contrib/omarchy/spotifast.json.tpl
-    dst: /usr/share/spotifast/omarchy/spotifast.json.tpl
+  - src: contrib/omarchy/jellifast.json.tpl
+    dst: /usr/share/jellifast/omarchy/jellifast.json.tpl
     file_info:
       mode: 420
-  - src: contrib/omarchy/spotifast-theme
-    dst: /usr/share/spotifast/omarchy/spotifast-theme
+  - src: contrib/omarchy/jellifast-theme
+    dst: /usr/share/jellifast/omarchy/jellifast-theme
     file_info:
       mode: 493
   overrides:
@@ -101,7 +101,7 @@ targets:
       local: dist/macos-input
     native:
       command: [ruby, packaging/macos/dmg.rb, '@PAYLOAD@', '@PACKAGE@']
-      output: 'spotifast-@TAG@-macos-universal.dmg'
+      output: 'jellifast-@TAG@-macos-universal.dmg'
   linux-amd64:
     platform: linux
     arch: amd64
@@ -112,8 +112,8 @@ targets:
     - rpm
     - appimage
     input:
-      local: dist/spotifast-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
-      release_asset: spotifast-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
+      local: dist/jellifast-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
+      release_asset: jellifast-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
   linux-arm64:
     platform: linux
     arch: arm64
@@ -124,75 +124,75 @@ targets:
     - rpm
     - appimage
     input:
-      local: dist/spotifast-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
-      release_asset: spotifast-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
+      local: dist/jellifast-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
+      release_asset: jellifast-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
 release:
-  repository: crmne/spotifast
+  repository: j4ckxyz/jellifast
   prereleases: true
   checksums: checksums.txt
 assets:
   AMD64:
-    file: spotifast-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
-    local: dist/spotifast-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
+    file: jellifast-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
+    local: dist/jellifast-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
   ARM64:
-    file: spotifast-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
-    local: dist/spotifast-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
+    file: jellifast-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
+    local: dist/jellifast-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
   SOURCE:
-    file: spotifast-v@VERSION@-source.tar.gz
-    local: dist/spotifast-v@VERSION@-source.tar.gz
+    file: jellifast-v@VERSION@-source.tar.gz
+    local: dist/jellifast-v@VERSION@-source.tar.gz
   MACOS:
-    file: spotifast-v@VERSION@-macos-universal.dmg
-    local: dist/spotifast-v@VERSION@-macos-universal.dmg
+    file: jellifast-v@VERSION@-macos-universal.dmg
+    local: dist/jellifast-v@VERSION@-macos-universal.dmg
 templates:
-  arch/spotifast/PKGBUILD: packaging/arch/spotifast/PKGBUILD.in
-  arch/spotifast/spotifast.install: packaging/arch/spotifast.install
-  arch/spotifast-bin/PKGBUILD: packaging/arch/spotifast-bin/PKGBUILD.in
-  arch/spotifast-bin/spotifast-bin.install: packaging/arch/spotifast.install
-  arch/spotifast-git/PKGBUILD: packaging/arch/spotifast-git/PKGBUILD.in
-  arch/spotifast-git/spotifast-git.install: packaging/arch/spotifast.install
-  homebrew/spotifast.rb: packaging/homebrew/spotifast.rb.in
+  arch/jellifast/PKGBUILD: packaging/arch/jellifast/PKGBUILD.in
+  arch/jellifast/jellifast.install: packaging/arch/jellifast.install
+  arch/jellifast-bin/PKGBUILD: packaging/arch/jellifast-bin/PKGBUILD.in
+  arch/jellifast-bin/jellifast-bin.install: packaging/arch/jellifast.install
+  arch/jellifast-git/PKGBUILD: packaging/arch/jellifast-git/PKGBUILD.in
+  arch/jellifast-git/jellifast-git.install: packaging/arch/jellifast.install
+  homebrew/jellifast.rb: packaging/homebrew/jellifast.rb.in
 repositories:
   aur-source:
     group: aur
-    url: https://aur.archlinux.org/spotifast.git
-    push_url: ssh://aur@aur.archlinux.org/spotifast.git
+    url: https://aur.archlinux.org/jellifast.git
+    push_url: ssh://aur@aur.archlinux.org/jellifast.git
     branch: master
     package_path: "."
     files:
-      arch/spotifast: "."
+      arch/jellifast: "."
     version_file: ".SRCINFO"
     version_pattern: "^\\s*pkgver = (\\S+)"
     publish: push
   aur-bin:
     group: aur
-    url: https://aur.archlinux.org/spotifast-bin.git
-    push_url: ssh://aur@aur.archlinux.org/spotifast-bin.git
+    url: https://aur.archlinux.org/jellifast-bin.git
+    push_url: ssh://aur@aur.archlinux.org/jellifast-bin.git
     branch: master
     package_path: "."
     files:
-      arch/spotifast-bin: "."
+      arch/jellifast-bin: "."
     version_file: ".SRCINFO"
     version_pattern: "^\\s*pkgver = (\\S+)"
     publish: push
   aur-git:
     group: aur
-    url: https://aur.archlinux.org/spotifast-git.git
-    push_url: ssh://aur@aur.archlinux.org/spotifast-git.git
+    url: https://aur.archlinux.org/jellifast-git.git
+    push_url: ssh://aur@aur.archlinux.org/jellifast-git.git
     branch: master
     package_path: "."
     files:
-      arch/spotifast-git: "."
+      arch/jellifast-git: "."
     version_file: ".SRCINFO"
     version_pattern: "^\\s*pkgver = (\\S+)"
     publish: push
   homebrew:
-    url: https://github.com/crmne/homebrew-tap.git
-    push_url: https://github.com/crmne/homebrew-tap.git
+    url: https://github.com/j4ckxyz/homebrew-tap.git
+    push_url: https://github.com/j4ckxyz/homebrew-tap.git
     branch: main
     package_path: Casks
     files:
-      homebrew/spotifast.rb: Casks/spotifast.rb
-    version_file: Casks/spotifast.rb
+      homebrew/jellifast.rb: Casks/jellifast.rb
+    version_file: Casks/jellifast.rb
     version_pattern: version "([^"]+)"
     publish: push
 version_file: Cargo.toml

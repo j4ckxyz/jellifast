@@ -303,7 +303,7 @@ mod tests {
             duration_ms: 180000,
             position_ms: 45000,
             art_path: None,
-            uri: "spotify:track:test".into(),
+            uri: "jellyfin:track:test".into(),
             saved: false,
             accent: Some([30, 215, 96]),
             is_episode: false,
@@ -329,8 +329,8 @@ mod tests {
             Action::ShowWindow
         ));
         assert!(matches!(
-            NotchCommand::ToggleSaved("spotify:track:abc".into()).action(),
-            Action::ToggleSaved(uri) if uri == "spotify:track:abc"
+            NotchCommand::ToggleSaved("jellyfin:track:abc".into()).action(),
+            Action::ToggleSaved(uri) if uri == "jellyfin:track:abc"
         ));
         assert!(matches!(
             NotchCommand::Seek(12345).action(),
@@ -455,7 +455,7 @@ mod tests {
             duration_ms: 200000,
             position_ms: 10000,
             art_path: Some("/tmp/a.jpg".into()),
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             saved: false,
             accent: Some([20, 30, 40]),
             is_episode: false,
@@ -511,7 +511,7 @@ mod tests {
             duration_ms: 200000,
             position_ms: 10100, // 10s
             art_path: None,
-            uri: "spotify:track:s".into(),
+            uri: "jellyfin:track:s".into(),
             saved: false,
             accent: None,
             is_episode: false,

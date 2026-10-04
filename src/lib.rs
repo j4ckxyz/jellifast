@@ -1,9 +1,10 @@
-//! Spotifast's internals, exposed so diagnostics and tests can reach them.
+//! Jellifast's internals, exposed so diagnostics and tests can reach them.
 
 pub mod api;
 pub mod app;
 #[cfg(target_os = "linux")]
 pub mod appearance;
+pub mod audio;
 pub mod auth;
 pub mod autoscroll;
 pub mod backend;
@@ -37,7 +38,6 @@ pub mod paths;
 pub mod player;
 pub mod playlist_cover;
 pub mod resample;
-pub mod session_reads;
 pub mod settings;
 pub mod single_instance;
 pub mod sink;
@@ -51,4 +51,3 @@ pub mod util;
 pub mod vis;
 pub mod winamp;
 pub mod window;
-pub mod zeroconf;

@@ -1,0 +1,2853 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR Jellifast contributors
+# This file is distributed under the same license as the Jellifast package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: Jellifast\n"
+"Report-Msgid-Bugs-To: https://github.com/j4ckxyz/jellifast/issues/new?"
+"template=translation.yml\n"
+"POT-Creation-Date: 2026-10-04 21:59+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#. Translators: The play button on a Library card. {name} is the playlist, album, artist, or podcast.
+#: src/ui/sidebar.rs:172
+#, rust-format
+msgid "Pause {name}"
+msgstr ""
+
+#. Translators: The play button on a Library card. {name} is the playlist, album, artist, or podcast.
+#: src/ui/sidebar.rs:175
+#, rust-format
+msgid "Play {name}"
+msgstr ""
+
+#: src/ui/sidebar.rs:300 src/app.rs:2296 src/app.rs:15518
+#: src/ui/collection.rs:1695 src/ui/collection.rs:1872
+msgid "Playlist"
+msgstr ""
+
+#: src/ui/sidebar.rs:310 src/app.rs:2270 src/app.rs:15523
+#: src/ui/collection.rs:1865 src/ui/home.rs:49 src/ui/keys.rs:258
+#: src/ui/winamp/playlist.rs:653
+msgid "Liked Songs"
+msgstr ""
+
+#: src/ui/sidebar.rs:350
+msgid "Library order"
+msgstr ""
+
+#: src/ui/sidebar.rs:353 src/ui/home.rs:272 src/ui/home.rs:282
+#: src/ui/home.rs:309
+msgid "Recently played"
+msgstr ""
+
+#: src/ui/sidebar.rs:355 src/ui/dialogs.rs:326 src/ui/dialogs.rs:481
+msgid "Name"
+msgstr ""
+
+#: src/ui/sidebar.rs:358 src/ui/home.rs:205 src/ui/home.rs:218
+msgid "Recently added"
+msgstr ""
+
+#: src/ui/sidebar.rs:360
+msgid "Local custom order"
+msgstr ""
+
+#: src/ui/sidebar.rs:361
+msgid "Custom order"
+msgstr ""
+
+#: src/ui/sidebar.rs:668
+msgid "Folder"
+msgstr ""
+
+#. Translators: {owner} is the name of the playlist's owner.
+#: src/ui/sidebar.rs:776 src/ui/search.rs:214
+#, rust-format
+msgid "Playlist • {owner}"
+msgstr ""
+
+#: src/ui/sidebar.rs:832 src/i18n.rs:255 src/i18n.rs:258 src/ui/keys.rs:254
+#: src/ui/topbar.rs:243
+msgid "Home"
+msgstr ""
+
+#: src/ui/sidebar.rs:843 src/app.rs:5738 src/ui/keys.rs:245
+msgid "Search"
+msgstr ""
+
+#: src/ui/sidebar.rs:882
+msgid "Hide sidebar (Ctrl+B)"
+msgstr ""
+
+#: src/ui/sidebar.rs:883
+msgid "Hide sidebar (Cmd+B)"
+msgstr ""
+
+#: src/ui/sidebar.rs:892
+msgid "Show as list"
+msgstr ""
+
+#: src/ui/sidebar.rs:894
+msgid "Show as grid"
+msgstr ""
+
+#: src/ui/sidebar.rs:907
+msgid "Create a playlist"
+msgstr ""
+
+#: src/ui/sidebar.rs:923
+msgid "Search Your Library"
+msgstr ""
+
+#: src/ui/sidebar.rs:939
+msgid "Library"
+msgstr ""
+
+#: src/ui/sidebar.rs:959 src/model.rs:642 src/ui/search.rs:647
+msgid "Playlists"
+msgstr ""
+
+#: src/ui/sidebar.rs:960 src/model.rs:641 src/model.rs:755 src/ui/library.rs:17
+#: src/ui/search.rs:575
+msgid "Albums"
+msgstr ""
+
+#: src/ui/sidebar.rs:961 src/model.rs:640 src/ui/library.rs:22
+#: src/ui/search.rs:508
+msgid "Artists"
+msgstr ""
+
+#: src/ui/sidebar.rs:982
+msgid "Search in Your Library"
+msgstr ""
+
+#: src/ui/sidebar.rs:1110 src/app.rs:2331 src/ui/artist.rs:203
+#: src/ui/artist.rs:311 src/ui/home.rs:542 src/ui/library.rs:100
+#: src/ui/search.rs:145 src/ui/search.rs:472 src/ui/winamp/playlist.rs:727
+msgid "Artist"
+msgstr ""
+
+#. Translators: {publisher} is the podcast's publisher.
+#: src/ui/sidebar.rs:1146 src/ui/search.rs:239
+#, rust-format
+msgid "Podcast • {publisher}"
+msgstr ""
+
+#: src/ui/sidebar.rs:1204
+msgid "Nothing here yet."
+msgstr ""
+
+#: src/ui/sidebar.rs:1206
+msgid "No matches."
+msgstr ""
+
+#: src/ui/sidebar.rs:1833
+msgid "Sort by recently played"
+msgstr ""
+
+#: src/ui/sidebar.rs:1854 src/ui/player_bar.rs:681 src/ui/widgets.rs:997
+#: src/ui/artist.rs:341 src/ui/collection.rs:214 src/ui/search.rs:390
+#: src/ui/show.rs:311
+msgid "Play"
+msgstr ""
+
+#: src/ui/sidebar.rs:1872
+msgid "Unpin"
+msgstr ""
+
+#: src/ui/sidebar.rs:1874
+msgid "Pin to top"
+msgstr ""
+
+#. Translators: Keep {count} exactly as written. It becomes the number of liked songs.
+#: src/i18n.rs:178
+#, rust-format
+msgid "Playlist • {count} song"
+msgid_plural "Playlist • {count} songs"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: Keep {count} exactly as written. It becomes a number of songs.
+#. Translators: Keep {count} exactly as written. It becomes the number of selected songs.
+#. Translators: {count} is a number of songs.
+#: src/i18n.rs:189 src/ui/widgets.rs:566 src/ui/collection.rs:1959
+#, rust-format
+msgid "{count} song"
+msgid_plural "{count} songs"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: Keep {count} exactly as written. It becomes a number of playlists.
+#: src/i18n.rs:200
+#, rust-format
+msgid "{count} playlist"
+msgid_plural "{count} playlists"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: Keep {count} exactly as written. It becomes the number of playlists a folder holds.
+#: src/i18n.rs:211
+#, rust-format
+msgid "Folder • {count} playlist"
+msgid_plural "Folder • {count} playlists"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/i18n.rs:221
+#, rust-format
+msgid "{name}, folder, collapsed"
+msgstr ""
+
+#: src/i18n.rs:223
+#, rust-format
+msgid "{name}, folder, expanded"
+msgstr ""
+
+#: src/ui/player_bar.rs:80
+msgid "Click to change the visualizer"
+msgstr ""
+
+#: src/ui/player_bar.rs:400 src/ui/lyrics.rs:131 src/ui/lyrics.rs:600
+msgid "Nothing playing"
+msgstr ""
+
+#: src/ui/player_bar.rs:406 src/app.rs:7006
+msgid "Pick a song, album, or playlist"
+msgstr ""
+
+#: src/ui/player_bar.rs:537 src/ui/widgets.rs:596 src/ui/widgets.rs:827
+#: src/ui/widgets.rs:1723
+msgid "Remove from Liked Songs"
+msgstr ""
+
+#: src/ui/player_bar.rs:543 src/ui/widgets.rs:599 src/ui/widgets.rs:830
+#: src/ui/widgets.rs:1725
+msgid "Save to Liked Songs"
+msgstr ""
+
+#: src/ui/player_bar.rs:625 src/ui/player_bar.rs:632 src/ui/collection.rs:260
+msgid "Shuffle"
+msgstr ""
+
+#: src/ui/player_bar.rs:646
+msgid "Previous"
+msgstr ""
+
+#: src/ui/player_bar.rs:679 src/ui/collection.rs:212
+msgid "Pause"
+msgstr ""
+
+#: src/ui/player_bar.rs:697
+msgid "Next"
+msgstr ""
+
+#: src/ui/player_bar.rs:705
+msgid "Repeat"
+msgstr ""
+
+#: src/ui/player_bar.rs:709
+msgid "Repeat one"
+msgstr ""
+
+#: src/ui/player_bar.rs:714
+msgid "Repeat off"
+msgstr ""
+
+#: src/ui/player_bar.rs:775
+msgid "Playback position (%)"
+msgstr ""
+
+#: src/ui/player_bar.rs:818
+msgid "Volume (%)"
+msgstr ""
+
+#: src/ui/player_bar.rs:851
+msgid "Unmute"
+msgstr ""
+
+#: src/ui/player_bar.rs:853
+msgid "Mute"
+msgstr ""
+
+#: src/ui/player_bar.rs:869
+msgid "This device's volume can't be changed from Jellifast"
+msgstr ""
+
+#: src/ui/player_bar.rs:884 src/ui/devices.rs:54
+msgid "Connect to a device"
+msgstr ""
+
+#: src/ui/player_bar.rs:903 src/ui/queue.rs:23 src/ui/queue.rs:79
+msgid "Queue"
+msgstr ""
+
+#: src/ui/player_bar.rs:929 src/ui/lyrics.rs:67 src/ui/lyrics.rs:523
+msgid "Lyrics"
+msgstr ""
+
+#: src/ui/queue.rs:80
+msgid "Recent"
+msgstr ""
+
+#: src/ui/queue.rs:92 src/ui/lyrics.rs:78 src/ui/mod.rs:478
+msgid "Close"
+msgstr ""
+
+#: src/ui/queue.rs:152
+msgid "Save as a playlist"
+msgstr ""
+
+#: src/ui/queue.rs:169
+msgid "Clear queue"
+msgstr ""
+
+#: src/ui/queue.rs:241
+msgid "Playing from"
+msgstr ""
+
+#: src/ui/queue.rs:261
+msgid "Now playing"
+msgstr ""
+
+#: src/ui/queue.rs:302
+msgid "Nothing queued"
+msgstr ""
+
+#: src/ui/queue.rs:303
+msgid "Queued songs appear here."
+msgstr ""
+
+#. Translators: Songs added manually, before the current playlist or album continues.
+#: src/ui/queue.rs:326
+msgid "Playing next"
+msgstr ""
+
+#. Translators: Upcoming songs from the current playlist or album, after manually queued songs.
+#: src/ui/queue.rs:433
+msgid "Next up"
+msgstr ""
+
+#: src/ui/queue.rs:474 src/ui/queue.rs:507 src/ui/widgets.rs:2492
+#: src/ui/collection.rs:1065
+msgid "Retry"
+msgstr ""
+
+#: src/ui/queue.rs:489
+msgid "No recent plays"
+msgstr ""
+
+#: src/ui/queue.rs:490
+msgid "Played songs appear here."
+msgstr ""
+
+#: src/ui/queue.rs:565 src/ui/artist.rs:185
+msgid "Load more"
+msgstr ""
+
+#: src/ui/lyrics.rs:90
+msgid "Full screen lyrics"
+msgstr ""
+
+#: src/ui/lyrics.rs:102 src/ui/lyrics.rs:546
+msgctxt "lyrics"
+msgid "Follow"
+msgstr ""
+
+#: src/ui/lyrics.rs:132 src/ui/lyrics.rs:601
+msgid "Play a song to see its lyrics."
+msgstr ""
+
+#. Translators: Keep {error} unchanged. It is the original failure detail.
+#: src/ui/lyrics.rs:145 src/ui/lyrics.rs:378 src/ui/lyrics.rs:614
+#, rust-format
+msgid "Couldn't fetch the lyrics: {error}"
+msgstr ""
+
+#: src/ui/lyrics.rs:151 src/ui/lyrics.rs:405 src/ui/lyrics.rs:620
+msgid "Try again"
+msgstr ""
+
+#: src/ui/lyrics.rs:162 src/ui/lyrics.rs:371 src/ui/lyrics.rs:631
+msgid "No lyrics"
+msgstr ""
+
+#: src/ui/lyrics.rs:163 src/ui/lyrics.rs:372 src/ui/lyrics.rs:632
+msgid "No lyrics found for this track."
+msgstr ""
+
+#: src/ui/lyrics.rs:172 src/ui/lyrics.rs:367 src/ui/lyrics.rs:641
+msgid "Instrumental"
+msgstr ""
+
+#: src/ui/lyrics.rs:173 src/ui/lyrics.rs:368 src/ui/lyrics.rs:642
+msgid "No timed lyrics for this track."
+msgstr ""
+
+#: src/ui/lyrics.rs:385 src/ui/widgets.rs:2477 src/app.rs:9816
+#: src/ui/collection.rs:728
+msgid "Loading…"
+msgstr ""
+
+#: src/ui/lyrics.rs:534
+msgid "Leave full screen (Esc)"
+msgstr ""
+
+#: src/ui/widgets.rs:582 src/ui/widgets.rs:815 src/ui/widgets.rs:1019
+msgid "Add to queue"
+msgstr ""
+
+#: src/ui/widgets.rs:615 src/ui/widgets.rs:891 src/ui/keys.rs:220
+msgid "Remove from this playlist"
+msgstr ""
+
+#: src/ui/widgets.rs:633
+msgid "Add to playlist"
+msgstr ""
+
+#: src/ui/widgets.rs:718
+msgid "Filter playlists"
+msgstr ""
+
+#: src/ui/widgets.rs:729 src/ui/dialogs.rs:319
+msgid "New playlist"
+msgstr ""
+
+#: src/ui/widgets.rs:758
+msgid "No editable playlists"
+msgstr ""
+
+#: src/ui/widgets.rs:760
+msgid "No matching playlists"
+msgstr ""
+
+#: src/ui/widgets.rs:840
+msgid "Save episode"
+msgstr ""
+
+#: src/ui/widgets.rs:865
+msgid "Move up"
+msgstr ""
+
+#: src/ui/widgets.rs:878
+msgid "Move down"
+msgstr ""
+
+#: src/ui/widgets.rs:906
+msgid "Go to song radio"
+msgstr ""
+
+#: src/ui/widgets.rs:920 src/ui/widgets.rs:927
+msgid "Go to artist"
+msgstr ""
+
+#: src/ui/widgets.rs:945
+msgid "Go to album"
+msgstr ""
+
+#: src/ui/widgets.rs:958
+msgid "Go to podcast"
+msgstr ""
+
+#: src/ui/widgets.rs:970 src/ui/widgets.rs:1080
+msgid "Copy link"
+msgstr ""
+
+#: src/ui/widgets.rs:978 src/ui/widgets.rs:1088
+msgid "Open in Jellyfin"
+msgstr ""
+
+#: src/ui/widgets.rs:1009
+msgid "Shuffle play"
+msgstr ""
+
+#: src/ui/widgets.rs:1029 src/ui/collection.rs:1743 src/ui/collection.rs:1765
+msgid "Remove from favorites"
+msgstr ""
+
+#: src/ui/widgets.rs:1030 src/ui/artist.rs:357 src/ui/collection.rs:1742
+#: src/ui/collection.rs:1764
+msgid "Add to favorites"
+msgstr ""
+
+#: src/ui/widgets.rs:1040 src/ui/dialogs.rs:418
+msgid "Edit details"
+msgstr ""
+
+#: src/ui/widgets.rs:1054 src/ui/dialogs.rs:76
+msgid "Delete"
+msgstr ""
+
+#: src/ui/widgets.rs:1065
+msgid "Go to playlist radio"
+msgstr ""
+
+#: src/ui/widgets.rs:1066
+msgid "Go to album radio"
+msgstr ""
+
+#: src/ui/widgets.rs:1067
+msgid "Go to artist radio"
+msgstr ""
+
+#. Translators: {title} is a song or episode name, {subtitle} its artists or podcast.
+#: src/ui/widgets.rs:1267
+#, rust-format
+msgid "Play {title}, {subtitle}"
+msgstr ""
+
+#: src/ui/widgets.rs:1770 src/ui/artist.rs:371 src/ui/collection.rs:306
+#: src/ui/show.rs:187 src/ui/show.rs:389
+msgid "More"
+msgstr ""
+
+#. Translators: The label beside the pointer while songs are dragged. {name} is the first song's name and {count} how many more songs are dragged with it.
+#: src/ui/widgets.rs:1906
+#, rust-format
+msgid "{name} + {count} more"
+msgid_plural "{name} + {count} more"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: {column} is a column heading of a song list, such as Title.
+#: src/ui/widgets.rs:2023
+#, rust-format
+msgid "Sort by {column}"
+msgstr ""
+
+#: src/ui/widgets.rs:2073
+msgid "Sort by playlist order"
+msgstr ""
+
+#: src/ui/widgets.rs:2108
+msgid "Original order, reversed"
+msgstr ""
+
+#: src/ui/widgets.rs:2121
+msgctxt "column heading"
+msgid "TITLE"
+msgstr ""
+
+#: src/ui/widgets.rs:2144
+msgctxt "column heading"
+msgid "ALBUM"
+msgstr ""
+
+#: src/ui/widgets.rs:2153
+msgctxt "column heading"
+msgid "ADDED BY"
+msgstr ""
+
+#: src/ui/widgets.rs:2162
+msgctxt "column heading"
+msgid "DATE ADDED"
+msgstr ""
+
+#: src/ui/widgets.rs:2183 src/ui/widgets.rs:2213
+msgid "Sort by duration"
+msgstr ""
+
+#: src/ui/widgets.rs:2725
+msgid "Cut"
+msgstr ""
+
+#: src/ui/widgets.rs:2730
+msgid "Copy"
+msgstr ""
+
+#: src/ui/widgets.rs:2735
+msgid "Paste"
+msgstr ""
+
+#: src/ui/widgets.rs:2752
+msgid "Select all"
+msgstr ""
+
+#: src/ui/widgets.rs:2855
+msgid "Clear"
+msgstr ""
+
+#. Translators: {name} is replaced by the author's name, shown as a link.
+#: src/ui/widgets.rs:2900
+#, rust-format
+msgid "Built with love by {name}"
+msgstr ""
+
+#: src/ui/widgets.rs:3045
+msgid "Host"
+msgstr ""
+
+#: src/ui/widgets.rs:3062
+msgid "Port"
+msgstr ""
+
+#: src/ui/widgets.rs:3080
+msgid "Username"
+msgstr ""
+
+#: src/ui/widgets.rs:3091 src/ui/login.rs:95
+msgid "Password"
+msgstr ""
+
+#: src/ui/widgets.rs:3109
+msgid ""
+"Proxy login applies to Web requests. Local playback uses this proxy only "
+"without a login."
+msgstr ""
+
+#: src/ui/widgets.rs:3112
+msgid "Host names are resolved by the proxy."
+msgstr ""
+
+#: src/app.rs:679
+msgid "Restoring proxy settings"
+msgstr ""
+
+#. Translators: {error} is a sentence saying why the proxy password could not be stored.
+#: src/app.rs:1842
+#, rust-format
+msgid ""
+"{error} The original settings file is kept intact; changed preferences are "
+"not saved yet."
+msgstr ""
+
+#. Translators: {version} is a version number such as 1.4.0.
+#: src/app.rs:1931
+#, rust-format
+msgid "Jellifast {version} is available"
+msgstr ""
+
+#: src/app.rs:1948
+msgid "Jellifast is up to date"
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:1956
+#, rust-format
+msgid "Couldn't check for updates: {error}"
+msgstr ""
+
+#. Translators: {error} is an error message from the playback engine.
+#: src/app.rs:2020
+#, rust-format
+msgid "Local playback: {error}"
+msgstr ""
+
+#: src/app.rs:2278 src/app/radio.rs:169 src/ui/radio.rs:35 src/ui/radio.rs:77
+msgid "Radio"
+msgstr ""
+
+#: src/app.rs:2312 src/api/models.rs:248
+msgid "Album"
+msgstr ""
+
+#: src/app.rs:2350 src/ui/show.rs:124
+msgid "Podcast"
+msgstr ""
+
+#. Translators: {count} is the number of visualizer presets added.
+#: src/app.rs:2763
+#, rust-format
+msgid "Added {count} MilkDrop preset"
+msgid_plural "Added {count} MilkDrop presets"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:2779
+#, rust-format
+msgid "Couldn't fetch presets: {error}"
+msgstr ""
+
+#. Translators: {folder} is a folder path and {error} is an error message.
+#: src/app.rs:2890
+#, rust-format
+msgid "Couldn't open {folder}: {error}"
+msgstr ""
+
+#. Translators: {skin} is the name of a Winamp skin.
+#: src/app.rs:2906
+#, rust-format
+msgid "Added {skin} skin"
+msgstr ""
+
+#: src/app.rs:3016
+msgid "Proxy applied. Restarting local playback."
+msgstr ""
+
+#: src/app.rs:3018
+msgid "Proxy settings applied"
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:3025
+#, rust-format
+msgid ""
+"Proxy could not be applied: {error}. Previous connection settings are still "
+"in use."
+msgstr ""
+
+#: src/app.rs:4276
+msgid "Queue cleared"
+msgstr ""
+
+#. Translators: Keep {date} unchanged. It is a date in YYYY-MM-DD form.
+#: src/app.rs:4306 src/app.rs:15508
+#, rust-format
+msgid "Queue {date}"
+msgstr ""
+
+#: src/app.rs:4723
+msgid "Your sign-in expired. Please sign in again."
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:4729
+#, rust-format
+msgid "Couldn't load your profile: {error}"
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:4768
+#, rust-format
+msgid "Couldn't list devices: {error}"
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:5059
+#, rust-format
+msgid "Couldn't load more playlists: {error}"
+msgstr ""
+
+#: src/app.rs:5105
+msgid ""
+"The server hasn't confirmed your playlist changes yet. Try refreshing again."
+msgstr ""
+
+#. Translators: {name} is a playlist name.
+#: src/app.rs:5301
+#, rust-format
+msgid "Created {name}"
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:5323
+#, rust-format
+msgid "Couldn't create the playlist: {error}"
+msgstr ""
+
+#: src/app.rs:5377
+msgid "Playlist cover updated"
+msgstr ""
+
+#: src/app.rs:5386
+msgid "Playlist updated"
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:5396 src/app.rs:5501
+#, rust-format
+msgid "Couldn't update the playlist: {error}"
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:5470
+#, rust-format
+msgid "Playlist change failed: {error}"
+msgstr ""
+
+#: src/app.rs:5489
+msgid "Playlist deleted"
+msgstr ""
+
+#: src/app.rs:5659
+msgid "Added to Liked Songs"
+msgstr ""
+
+#: src/app.rs:5661
+msgid "Removed from Liked Songs"
+msgstr ""
+
+#: src/app.rs:5663
+msgid "Added to favorites"
+msgstr ""
+
+#: src/app.rs:5664
+msgid "Removed from favorites"
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:5678
+#, rust-format
+msgid "Couldn't update your library: {error}"
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:5905
+#, rust-format
+msgid "Cannot open this song: {error}"
+msgstr ""
+
+#: src/app.rs:5919
+msgid "This episode's podcast is not on the server"
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:5924
+#, rust-format
+msgid "Cannot open this episode: {error}"
+msgstr ""
+
+#: src/app.rs:5961
+msgid "Choose a device from the devices menu first."
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:5984
+#, rust-format
+msgid "Couldn't switch device: {error}"
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:5995 src/app.rs:6019
+#, rust-format
+msgid "Couldn't add to queue: {error}"
+msgstr ""
+
+#: src/app.rs:6095
+msgid "This song's album is not in the library"
+msgstr ""
+
+#: src/app.rs:6112
+msgid "Jellifast cannot open this kind of link"
+msgstr ""
+
+#: src/app.rs:6275
+msgid "Nothing is playing. Pick something first"
+msgstr ""
+
+#: src/app.rs:6628
+msgid "Choose a device to play on"
+msgstr ""
+
+#: src/app.rs:6989 src/app.rs:6994
+msgid "Pick something to play"
+msgstr ""
+
+#. Translators: {name} is an album name.
+#: src/app.rs:7269
+#, rust-format
+msgid "Loading {name} to queue…"
+msgstr ""
+
+#: src/app.rs:7288
+msgid "Playback device changed. Add the album to queue again"
+msgstr ""
+
+#: src/app.rs:7297 src/app.rs:7315 src/app.rs:7324
+msgid "Couldn't load the album's songs in order. Try again"
+msgstr ""
+
+#. Translators: {name} is an album name and {error} is an error message.
+#: src/app.rs:7304
+#, rust-format
+msgid "Couldn't add {name} to queue: {error}"
+msgstr ""
+
+#: src/app.rs:7362
+msgid "This album has no playable songs to queue"
+msgstr ""
+
+#. Translators: {count} is a number of songs and {name} is an album name.
+#: src/app.rs:7371
+#, rust-format
+msgid "{count} song from {name} added to queue"
+msgid_plural "{count} songs from {name} added to queue"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: {count} is a number of songs.
+#: src/app.rs:7415
+#, rust-format
+msgid "{count} song added to queue"
+msgid_plural "{count} songs added to queue"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: {name} is a song, episode, album, or playlist name.
+#: src/app.rs:7452
+#, rust-format
+msgid "{name} added to queue"
+msgstr ""
+
+#: src/app.rs:7860
+msgid "The clipboard has no song links"
+msgstr ""
+
+#. Translators: {count} is the number of pasted links that failed.
+#: src/app.rs:7940
+#, rust-format
+msgid "{count} pasted link could not be added"
+msgid_plural "{count} pasted links could not be added"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/app.rs:8547 src/app.rs:8563
+msgid "Link copied"
+msgstr ""
+
+#. Translators: {count} is a number of song links, always more than one.
+#: src/app.rs:8567
+#, rust-format
+msgid "{count} link copied"
+msgid_plural "{count} links copied"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/app.rs:8797
+msgid ""
+"Jellyfin keeps playlists in one list, so this order is saved on this computer"
+msgstr ""
+
+#: src/app.rs:8857
+msgid "Restarting local playback"
+msgstr ""
+
+#: src/app.rs:8896
+msgid "Play history cleared"
+msgstr ""
+
+#. Translators: {size} is a size in megabytes, such as 12.5.
+#: src/app.rs:8907
+#, rust-format
+msgid "Cleared {size} MB of artwork"
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:8913
+#, rust-format
+msgid "Couldn't clear artwork: {error}"
+msgstr ""
+
+#: src/app.rs:9093
+msgid "Downloading MilkDrop preset packs"
+msgstr ""
+
+#. Translators: {name} is the name of a visualizer preset pack.
+#: src/app.rs:9127
+#, rust-format
+msgid "Downloading {name} presets"
+msgstr ""
+
+#: src/app.rs:9928
+msgid "Couldn't start playback"
+msgstr ""
+
+#: src/app.rs:9929
+msgid "Couldn't pause"
+msgstr ""
+
+#: src/app.rs:9930
+msgid "Couldn't skip"
+msgstr ""
+
+#: src/app.rs:9931
+msgid "Couldn't go back"
+msgstr ""
+
+#: src/app.rs:9932
+msgid "Couldn't seek"
+msgstr ""
+
+#: src/app.rs:9933
+msgid "Couldn't change the volume"
+msgstr ""
+
+#: src/app.rs:9934
+msgid "Couldn't change shuffle"
+msgstr ""
+
+#: src/app.rs:9935
+msgid "Couldn't change repeat"
+msgstr ""
+
+#: src/app.rs:9978
+msgid ""
+"No audio output device was found. Connect or enable one, then press play "
+"again."
+msgstr ""
+
+#: src/app.rs:9989
+msgid "The server doesn't make this playlist's songs available."
+msgstr ""
+
+#: src/app.rs:10102
+msgid "Your sign-in expired. Sign in again, then retry the cover upload."
+msgstr ""
+
+#: src/app.rs:10107
+msgid ""
+"The server refused this cover. Check that your account may edit this "
+"playlist."
+msgstr ""
+
+#: src/app.rs:10112
+msgid "The server rejected the image size. Choose a smaller image."
+msgstr ""
+
+#. Translators: {error} is an error message.
+#: src/app.rs:10116
+#, rust-format
+msgid "Couldn't upload the cover: {error}. Try again."
+msgstr ""
+
+#. Translators: Keep {track} unchanged. It is the name of the song,
+#. playlist, album, or artist the radio is based on, not translated.
+#: src/app.rs:15528 src/app/radio.rs:38
+#, rust-format
+msgid "{track} Radio"
+msgstr ""
+
+#: src/ui/settings.rs:203 src/ui/keys.rs:290 src/ui/topbar.rs:430
+#: src/ui/topbar.rs:460
+msgid "Settings"
+msgstr ""
+
+#: src/ui/settings.rs:217
+msgid "Search settings"
+msgstr ""
+
+#: src/ui/settings.rs:233
+msgid "Open folder"
+msgstr ""
+
+#: src/ui/settings.rs:235
+msgid "Account"
+msgstr ""
+
+#: src/ui/settings.rs:236 src/ui/topbar.rs:448
+msgid "Sign out"
+msgstr ""
+
+#: src/ui/settings.rs:276
+msgctxt "playback status"
+msgid "Ready"
+msgstr ""
+
+#: src/ui/settings.rs:277
+msgid "Music plays on this computer."
+msgstr ""
+
+#: src/ui/settings.rs:280
+msgctxt "playback status"
+msgid "Unavailable"
+msgstr ""
+
+#: src/ui/settings.rs:284
+msgctxt "playback status"
+msgid "Not set up"
+msgstr ""
+
+#: src/ui/settings.rs:285
+msgid "Sign in to a Jellyfin server to play music."
+msgstr ""
+
+#: src/ui/settings.rs:288
+msgid "Playback on this computer"
+msgstr ""
+
+#: src/ui/settings.rs:289
+msgid "Normalize volume"
+msgstr ""
+
+#: src/ui/settings.rs:290
+msgid "Autoplay"
+msgstr ""
+
+#: src/ui/settings.rs:291
+msgid "Gapless playback"
+msgstr ""
+
+#: src/ui/settings.rs:292
+msgid "Keep music playing when the window closes"
+msgstr ""
+
+#: src/ui/settings.rs:293
+msgid "Automatic update checks"
+msgstr ""
+
+#: src/ui/settings.rs:294
+msgid "Audio cache"
+msgstr ""
+
+#: src/ui/settings.rs:295
+msgid "Apply and restart playback"
+msgstr ""
+
+#: src/ui/settings.rs:296
+msgid "Restart local playback to apply these settings."
+msgstr ""
+
+#: src/ui/settings.rs:297
+msgid "Download updates automatically"
+msgstr ""
+
+#. Translators: {status} is a playback state such as Ready or Not set up.
+#: src/ui/settings.rs:301
+#, rust-format
+msgid "Status: {status}"
+msgstr ""
+
+#: src/ui/settings.rs:305
+msgid "Device name"
+msgstr ""
+
+#: src/ui/settings.rs:306
+msgid "How this computer appears in the server's device list."
+msgstr ""
+
+#: src/ui/settings.rs:309
+msgid "Audio quality"
+msgstr ""
+
+#: src/ui/settings.rs:312
+msgid ""
+"Original plays every file as it is. A limit has the server convert larger "
+"files."
+msgstr ""
+
+#: src/ui/settings.rs:317
+msgid "Keep loud and quiet tracks at a similar level."
+msgstr ""
+
+#: src/ui/settings.rs:321
+msgid "Keep playing similar songs when your music ends."
+msgstr ""
+
+#: src/ui/settings.rs:325
+msgid "Play tracks without silence between them."
+msgstr ""
+
+#: src/ui/settings.rs:332
+msgid ""
+"Jellifast hides to the system tray. Quit from the tray menu or with Ctrl+Q."
+msgstr ""
+
+#: src/ui/settings.rs:336
+msgid ""
+"Jellifast hides to the system tray. Quit from the tray menu or with Cmd+Q."
+msgstr ""
+
+#: src/ui/settings.rs:343
+msgid "Checks GitHub once a day. No personal data is sent."
+msgstr ""
+
+#: src/ui/settings.rs:349
+msgid "Output buffer"
+msgstr ""
+
+#: src/ui/settings.rs:352
+msgid ""
+"More buffering can prevent clicks on busy computers. Less buffering makes "
+"controls respond sooner."
+msgstr ""
+
+#: src/ui/settings.rs:358
+msgid "Save downloaded audio for later playback."
+msgstr ""
+
+#: src/ui/settings.rs:361
+msgid "Playback settings applied"
+msgstr ""
+
+#: src/ui/settings.rs:366
+msgid "Downloads in the background. You choose when to restart."
+msgstr ""
+
+#: src/ui/settings.rs:370 src/ui/settings.rs:515
+msgid "MacBook notch widget"
+msgstr ""
+
+#: src/ui/settings.rs:373
+msgid "Show interactive Now Playing widget when hovering over the notch."
+msgstr ""
+
+#: src/ui/settings.rs:387
+msgid "Restart"
+msgstr ""
+
+#: src/ui/settings.rs:419
+msgid "96 kbps"
+msgstr ""
+
+#: src/ui/settings.rs:420
+msgid "160 kbps"
+msgstr ""
+
+#: src/ui/settings.rs:421
+msgid "320 kbps"
+msgstr ""
+
+#: src/ui/settings.rs:422
+msgid "Original"
+msgstr ""
+
+#: src/ui/settings.rs:608
+msgid "Playback settings applied."
+msgstr ""
+
+#: src/ui/settings.rs:615
+msgid "Appearance"
+msgstr ""
+
+#: src/ui/settings.rs:616
+msgid "Theme"
+msgstr ""
+
+#: src/ui/settings.rs:617
+msgid "How to make a theme"
+msgstr ""
+
+#: src/ui/settings.rs:618
+msgid "Open themes folder"
+msgstr ""
+
+#: src/ui/settings.rs:619
+msgid "Colour from album art"
+msgstr ""
+
+#: src/ui/settings.rs:620
+msgid "Compact library sidebar"
+msgstr ""
+
+#: src/ui/settings.rs:621
+msgid "Compact track list"
+msgstr ""
+
+#: src/ui/settings.rs:622
+msgid "Middle-click autoscroll"
+msgstr ""
+
+#: src/ui/settings.rs:623
+msgid "Custom title bar"
+msgstr ""
+
+#: src/ui/settings.rs:624
+msgid "Player bar visualizer"
+msgstr ""
+
+#: src/ui/settings.rs:635
+msgid "Follow system uses your Omarchy colours."
+msgstr ""
+
+#: src/ui/settings.rs:639
+msgid "Follow system uses your desktop's light or dark appearance."
+msgstr ""
+
+#: src/ui/settings.rs:644 src/ui/settings.rs:1790
+msgid "Language"
+msgstr ""
+
+#: src/ui/settings.rs:647
+msgid ""
+"System follows your computer's language. Untranslated text stays in English."
+msgstr ""
+
+#: src/ui/settings.rs:654
+msgid "Use the current cover's colour on pages and the player bar."
+msgstr ""
+
+#: src/ui/settings.rs:659
+msgid "Show names without covers in the sidebar."
+msgstr ""
+
+#: src/ui/settings.rs:663
+msgid "Show each track on one line without a cover."
+msgstr ""
+
+#: src/ui/settings.rs:666
+msgid "Interface zoom"
+msgstr ""
+
+#: src/ui/settings.rs:670
+msgid "Ctrl+Plus and Ctrl+Minus work anywhere; Ctrl+0 resets."
+msgstr ""
+
+#: src/ui/settings.rs:674
+msgid "Cmd+Plus and Cmd+Minus work anywhere; Cmd+0 resets."
+msgstr ""
+
+#: src/ui/settings.rs:683
+msgid ""
+"Middle-click a list, then move the pointer to scroll it. Off by default, "
+"because a middle click usually pastes on Linux."
+msgstr ""
+
+#: src/ui/settings.rs:691
+msgid ""
+"Draw Jellifast's own title bar and window buttons instead of the standard "
+"Windows ones."
+msgstr ""
+
+#: src/ui/settings.rs:699
+msgid ""
+"Show the song moving behind the player bar's controls while it plays here."
+msgstr ""
+
+#: src/ui/settings.rs:834
+msgid "Off"
+msgstr ""
+
+#: src/ui/settings.rs:835
+msgid "Spectrum"
+msgstr ""
+
+#: src/ui/settings.rs:836
+msgid "Waveform"
+msgstr ""
+
+#: src/ui/settings.rs:993
+msgid "Proxy"
+msgstr ""
+
+#: src/ui/settings.rs:995
+msgid "Mode, host, port, username and password"
+msgstr ""
+
+#: src/ui/settings.rs:998
+msgid "Off, System, HTTP or SOCKS5 proxy for network requests."
+msgstr ""
+
+#: src/ui/settings.rs:1008
+msgctxt "proxy"
+msgid "Mode"
+msgstr ""
+
+#: src/ui/settings.rs:1011
+msgid ""
+"Off ignores environment variables. System uses them, and the OS proxy on "
+"macOS and Windows."
+msgstr ""
+
+#: src/ui/settings.rs:1063 src/ui/login.rs:268
+msgid "Apply settings"
+msgstr ""
+
+#: src/ui/settings.rs:1075
+msgid "Not using a proxy."
+msgstr ""
+
+#: src/ui/settings.rs:1076
+msgid "Using the system proxy."
+msgstr ""
+
+#: src/ui/settings.rs:1087
+msgid "Winamp skins"
+msgstr ""
+
+#: src/ui/settings.rs:1088 src/ui/winamp/mod.rs:706 src/ui/winamp/mod.rs:852
+msgid "Always on top"
+msgstr ""
+
+#: src/ui/settings.rs:1089
+msgid "Show Winamp in taskbar"
+msgstr ""
+
+#: src/ui/settings.rs:1092
+msgid "Mini player"
+msgstr ""
+
+#: src/ui/settings.rs:1096
+msgid ""
+"Use classic Winamp .wsz skins. Press Ctrl+M or click the skin logo to "
+"return. Drop a skin on either window to add it."
+msgstr ""
+
+#: src/ui/settings.rs:1100
+msgid ""
+"Use classic Winamp .wsz skins. Press Cmd+Shift+M or click the skin logo to "
+"return. Drop a skin on either window to add it."
+msgstr ""
+
+#: src/ui/settings.rs:1106
+msgid "Skin"
+msgstr ""
+
+#. Translators: {folder} is the path of the skins folder.
+#: src/ui/settings.rs:1110
+#, rust-format
+msgid "Installed skins are in {folder}. Find more at the Winamp Skin Museum."
+msgstr ""
+
+#: src/ui/settings.rs:1115 src/ui/winamp/mod.rs:693
+msgid "Size"
+msgstr ""
+
+#: src/ui/settings.rs:1116
+msgid "Whole-number scaling keeps skin pixels sharp."
+msgstr ""
+
+#: src/ui/settings.rs:1121
+msgid "Keep the Winamp window above everything else."
+msgstr ""
+
+#: src/ui/settings.rs:1127 src/ui/winamp/mod.rs:716
+msgid "Show in taskbar"
+msgstr ""
+
+#: src/ui/settings.rs:1130
+msgid ""
+"Keep a taskbar button for the mini player. The tray icon stays available "
+"when hidden."
+msgstr ""
+
+#: src/ui/settings.rs:1135
+msgid "Installed skins"
+msgstr ""
+
+#: src/ui/settings.rs:1148
+msgid "Switch to it"
+msgstr ""
+
+#: src/ui/settings.rs:1161
+msgid "Skin Museum"
+msgstr ""
+
+#: src/ui/settings.rs:1187
+msgid "Random"
+msgstr ""
+
+#: src/ui/settings.rs:1226
+#, rust-format
+msgid ""
+"Now showing {skin}. Another one is picked each time the mini player opens."
+msgstr ""
+
+#: src/ui/settings.rs:1280
+msgid "MilkDrop window"
+msgstr ""
+
+#: src/ui/settings.rs:1288
+msgid ""
+"A projectM visualiser for local playback. Open it here, from the top bar, "
+"with Ctrl+Shift+K, or from the mini player's V menu. Press ? or F1 for its "
+"shortcuts."
+msgstr ""
+
+#: src/ui/settings.rs:1292
+msgid ""
+"A projectM visualiser for local playback. Open it here, from the top bar, "
+"with Cmd+Shift+K, or from the mini player's V menu. Press ? or F1 for its "
+"shortcuts."
+msgstr ""
+
+#: src/ui/settings.rs:1298 src/ui/settings.rs:1528
+msgid "Presets"
+msgstr ""
+
+#. Translators: {folder} is the path of the MilkDrop presets folder.
+#: src/ui/settings.rs:1303
+#, rust-format
+msgid ""
+"None yet in {folder}. Add .milk files here. Jellifast downloads presets when "
+"MilkDrop first opens with an empty folder."
+msgstr ""
+
+#. Translators: {folder} is the path of the MilkDrop presets folder.
+#: src/ui/settings.rs:1309
+#, rust-format
+msgid ""
+"One preset in {folder}. Add .milk files here. Jellifast downloads presets "
+"when MilkDrop first opens with an empty folder."
+msgstr ""
+
+#. Translators: {count} is the number of presets, {folder} the path of the MilkDrop presets folder.
+#: src/ui/settings.rs:1315
+#, rust-format
+msgid ""
+"{count} preset in {folder}. Add .milk files here. Jellifast downloads "
+"presets when MilkDrop first opens with an empty folder."
+msgid_plural ""
+"{count} presets in {folder}. Add .milk files here. Jellifast downloads "
+"presets when MilkDrop first opens with an empty folder."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ui/settings.rs:1324
+msgid "Time per preset"
+msgstr ""
+
+#: src/ui/settings.rs:1327
+msgid "How long each preset plays before the next fades in."
+msgstr ""
+
+#: src/ui/settings.rs:1331
+msgid "Frame rate"
+msgstr ""
+
+#: src/ui/settings.rs:1335
+msgid "Lower rates use fewer resources. Uncapped draws as fast as possible."
+msgstr ""
+
+#. Translators: {hz} is the screen's refresh rate in hertz.
+#: src/ui/settings.rs:1340
+#, rust-format
+msgid ""
+"Your screen refreshes at {hz} Hz. Higher rates do not add visible frames. "
+"Uncapped draws as fast as possible."
+msgstr ""
+
+#: src/ui/settings.rs:1347
+msgid "Resolution"
+msgstr ""
+
+#: src/ui/settings.rs:1350
+msgid "Half and Quarter use fewer resources and scale the image back up."
+msgstr ""
+
+#. Translators: search keywords for the MilkDrop preset download buttons.
+#: src/ui/settings.rs:1357
+msgid "Get presets"
+msgstr ""
+
+#: src/ui/settings.rs:1395
+msgid "Fetching..."
+msgstr ""
+
+#. Translators: {pack} is the name of a MilkDrop preset pack.
+#: src/ui/settings.rs:1398
+#, rust-format
+msgid "Get {pack}"
+msgstr ""
+
+#: src/ui/settings.rs:1500
+msgctxt "resolution"
+msgid "Full"
+msgstr ""
+
+#: src/ui/settings.rs:1501
+msgctxt "resolution"
+msgid "Half"
+msgstr ""
+
+#: src/ui/settings.rs:1502
+msgctxt "resolution"
+msgid "Quarter"
+msgstr ""
+
+#: src/ui/settings.rs:1516
+msgid "Equalizer"
+msgstr ""
+
+#: src/ui/settings.rs:1522
+msgid ""
+"A ten-band equalizer for playback on this computer. It does not affect other "
+"devices."
+msgstr ""
+
+#. Translators: a search keyword for the equalizer's preamplifier slider.
+#: src/ui/settings.rs:1530
+msgid "Preamp"
+msgstr ""
+
+#. Translators: a search keyword for the equalizer's frequency band sliders.
+#: src/ui/settings.rs:1532
+msgid "Bands"
+msgstr ""
+
+#. Translators: short label under the equalizer's preamplifier slider.
+#: src/ui/settings.rs:1582
+msgctxt "equalizer"
+msgid "Pre"
+msgstr ""
+
+#: src/ui/settings.rs:1599
+msgid "Storage"
+msgstr ""
+
+#: src/ui/settings.rs:1602
+msgid "Artwork cache"
+msgstr ""
+
+#. Translators: {folder} is the path of a cache folder.
+#: src/ui/settings.rs:1604 src/ui/settings.rs:1610
+#, rust-format
+msgid "Stored in {folder}"
+msgstr ""
+
+#: src/ui/settings.rs:1616
+msgid "Play history"
+msgstr ""
+
+#. Translators: {file} is the path of the play history file.
+#: src/ui/settings.rs:1620
+#, rust-format
+msgid "Tracks played here are stored in {file}. This file is never uploaded."
+msgstr ""
+
+#: src/ui/settings.rs:1625
+msgid "Sign-in"
+msgstr ""
+
+#: src/ui/settings.rs:1628
+msgid "Sign-ins are saved in the system credential store when available."
+msgstr ""
+
+#: src/ui/settings.rs:1640
+msgid "Clear artwork"
+msgstr ""
+
+#: src/ui/settings.rs:1654
+msgid "Clear history"
+msgstr ""
+
+#: src/ui/settings.rs:1666 src/ui/show.rs:34
+msgid "About"
+msgstr ""
+
+#: src/ui/settings.rs:1669
+msgid ""
+"Built with Rust, egui, and Symphonia. Not affiliated with the Jellyfin "
+"project."
+msgstr ""
+
+#: src/ui/settings.rs:1671
+msgid "Check for updates"
+msgstr ""
+
+#: src/ui/settings.rs:1672
+msgid "Checking…"
+msgstr ""
+
+#: src/ui/settings.rs:1673 src/ui/dialogs.rs:143 src/ui/keys.rs:300
+#: src/ui/topbar.rs:438
+msgid "Keyboard shortcuts"
+msgstr ""
+
+#: src/ui/settings.rs:1674
+msgid "Source code"
+msgstr ""
+
+#. Translators: {query} is the text typed into the settings search field.
+#: src/ui/settings.rs:1746
+#, rust-format
+msgid "No settings for “{query}”"
+msgstr ""
+
+#: src/ui/settings.rs:1747
+msgid "Try fewer words, or check the spelling."
+msgstr ""
+
+#: src/ui/settings.rs:1763
+msgctxt "language"
+msgid "System"
+msgstr ""
+
+#: src/api/models.rs:245
+msgid "Single"
+msgstr ""
+
+#: src/api/models.rs:246
+msgid "Compilation"
+msgstr ""
+
+#: src/api/models.rs:247 src/model.rs:757
+msgid "Appears On"
+msgstr ""
+
+#: src/milkdrop.rs:52
+msgid "Uncapped"
+msgstr ""
+
+#. Translators: A frame rate that matches the display. Keep {rate}.
+#: src/milkdrop.rs:56
+#, rust-format
+msgid "{rate} fps, your screen"
+msgstr ""
+
+#: src/model.rs:638 src/model.rs:754
+msgctxt "filter"
+msgid "All"
+msgstr ""
+
+#: src/model.rs:639 src/ui/search.rs:425
+msgid "Songs"
+msgstr ""
+
+#: src/model.rs:643 src/ui/library.rs:27 src/ui/search.rs:697
+msgid "Podcasts"
+msgstr ""
+
+#: src/model.rs:644 src/ui/library.rs:32 src/ui/search.rs:272
+msgid "Episodes"
+msgstr ""
+
+#: src/model.rs:756
+msgid "Singles & EPs"
+msgstr ""
+
+#: src/settings.rs:161
+msgctxt "theme"
+msgid "Dark"
+msgstr ""
+
+#: src/settings.rs:162
+msgctxt "theme"
+msgid "Light"
+msgstr ""
+
+#: src/settings.rs:163
+msgid "Follow system"
+msgstr ""
+
+#: src/settings.rs:189
+msgctxt "proxy"
+msgid "Off"
+msgstr ""
+
+#: src/settings.rs:190
+msgctxt "proxy"
+msgid "System"
+msgstr ""
+
+#: src/theme.rs:160
+msgid "Loading local themes…"
+msgstr ""
+
+#: src/theme.rs:163
+msgid ""
+"The selected theme is unavailable. Keeping the last usable appearance. See "
+"the log for details."
+msgstr ""
+
+#: src/theme.rs:167
+msgid "The themes folder could not be read. See the log for details."
+msgstr ""
+
+#: src/theme.rs:171
+msgid ""
+"The themes folder has more than 512 entries. Keep fewer files there to list "
+"the custom palettes."
+msgstr ""
+
+#: src/theme.rs:175
+msgid ""
+"Only 128 custom palettes can be listed. Keep fewer JSON files in the themes "
+"folder to see the rest."
+msgstr ""
+
+#: src/theme.rs:179
+msgid ""
+"The Omarchy palette could not be loaded. Keeping the last usable appearance. "
+"See the log for details."
+msgstr ""
+
+#: src/theme.rs:183
+msgid ""
+"Custom themes could not be loaded. Run jellifast reload-themes to try again."
+msgstr ""
+
+#: src/ui/artist.rs:32
+msgid "Popular"
+msgstr ""
+
+#: src/ui/artist.rs:74
+msgid "Show less"
+msgstr ""
+
+#: src/ui/artist.rs:76
+msgid "See more"
+msgstr ""
+
+#: src/ui/artist.rs:87
+msgid "No popular songs to show."
+msgstr ""
+
+#: src/ui/artist.rs:100
+msgid "Discography"
+msgstr ""
+
+#: src/ui/artist.rs:178
+msgid "Nothing in this category."
+msgstr ""
+
+#: src/ui/artist.rs:204
+msgid "Fans also like"
+msgstr ""
+
+#. Translators: {count} is the number of people who follow an artist.
+#: src/ui/artist.rs:280
+#, rust-format
+msgid "{count} follower"
+msgid_plural "{count} followers"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ui/artist.rs:332 src/ui/collection.rs:200 src/ui/show.rs:146
+#: src/ui/show.rs:298
+msgid "Starting…"
+msgstr ""
+
+#: src/ui/artist.rs:355
+msgid "Favorite"
+msgstr ""
+
+#: src/ui/collection.rs:219
+msgid "No playable songs in this view"
+msgstr ""
+
+#: src/ui/collection.rs:258
+msgid "Shuffle off"
+msgstr ""
+
+#: src/ui/collection.rs:293 src/ui/collection.rs:319
+msgid "Save as playlist"
+msgstr ""
+
+#: src/ui/collection.rs:341
+msgid "Refreshing…"
+msgstr ""
+
+#: src/ui/collection.rs:343 src/ui/devices.rs:67
+msgid "Refresh"
+msgstr ""
+
+#: src/ui/collection.rs:362
+msgid "Filter"
+msgstr ""
+
+#: src/ui/collection.rs:722 src/ui/collection.rs:748
+msgid "Unavailable"
+msgstr ""
+
+#: src/ui/collection.rs:876
+msgid "Nothing here yet"
+msgstr ""
+
+#: src/ui/collection.rs:877
+msgid "Added songs appear here."
+msgstr ""
+
+#: src/ui/collection.rs:1287 src/ui/home.rs:653
+msgid "Your top songs"
+msgstr ""
+
+#: src/ui/collection.rs:1296
+msgid "Your most-played tracks from the last four weeks."
+msgstr ""
+
+#: src/ui/collection.rs:1691
+msgid "Collaborative Playlist"
+msgstr ""
+
+#: src/ui/collection.rs:1693
+msgid "Public Playlist"
+msgstr ""
+
+#. Translators: {count} is a number of songs and {duration} their total
+#. length, such as "2 hr 13 min".
+#: src/ui/collection.rs:1972
+#, rust-format
+msgid "{count} song, {duration}"
+msgid_plural "{count} songs, {duration}"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: {name} is the name of someone who added songs to the playlist.
+#: src/ui/collection.rs:1986
+#, rust-format
+msgid "with {name}"
+msgstr ""
+
+#. Translators: {first} and {second} are names of people who added songs.
+#: src/ui/collection.rs:1990
+#, rust-format
+msgid "with {first} and {second}"
+msgstr ""
+
+#. Translators: {count} is how many other people added songs to the playlist.
+#: src/ui/collection.rs:1997
+#, rust-format
+msgid "and {count} other"
+msgid_plural "and {count} others"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ui/devices.rs:125
+msgid "No players found. Open a Jellyfin app on another device, then refresh."
+msgstr ""
+
+#. Translators: {name} is the name this computer shows the Jellyfin server.
+#: src/ui/devices.rs:136
+#, rust-format
+msgid "{name} (this computer)"
+msgstr ""
+
+#: src/ui/devices.rs:171
+msgid "Listening on this device"
+msgstr ""
+
+#: src/ui/devices.rs:173
+msgid "Restricted"
+msgstr ""
+
+#: src/ui/devices.rs:175
+msgid "Play here"
+msgstr ""
+
+#: src/ui/dialogs.rs:43
+msgid "Delete playlist?"
+msgstr ""
+
+#: src/ui/dialogs.rs:45
+msgid "Remove from Your Library?"
+msgstr ""
+
+#: src/ui/dialogs.rs:55
+#, rust-format
+msgid "Delete “{name}” from the server? This cannot be undone."
+msgstr ""
+
+#. Translators: {name} is a playlist name.
+#: src/ui/dialogs.rs:59
+#, rust-format
+msgid "“{name}” will no longer appear in Your Library."
+msgstr ""
+
+#: src/ui/dialogs.rs:78
+msgid "Remove"
+msgstr ""
+
+#: src/ui/dialogs.rs:86 src/ui/dialogs.rs:133 src/ui/dialogs.rs:385
+#: src/ui/dialogs.rs:564 src/ui/login.rs:82
+msgid "Cancel"
+msgstr ""
+
+#: src/ui/dialogs.rs:104
+msgid "Songs already in this playlist"
+msgstr ""
+
+#: src/ui/dialogs.rs:106
+msgid "Song already in this playlist"
+msgstr ""
+
+#: src/ui/dialogs.rs:123
+msgid "Add anyway"
+msgstr ""
+
+#: src/ui/dialogs.rs:189
+msgid "Done"
+msgstr ""
+
+#: src/ui/dialogs.rs:223
+#, rust-format
+msgid "This song is already in “{playlist}”. Add it again?"
+msgstr ""
+
+#: src/ui/dialogs.rs:230
+#, rust-format
+msgid "This song is already in “{playlist}”. Add them anyway?"
+msgstr ""
+
+#. Translators: {name} is a song name and {playlist} a playlist name.
+#: src/ui/dialogs.rs:235
+#, rust-format
+msgid "“{name}” is already in “{playlist}”. Add it again?"
+msgstr ""
+
+#: src/ui/dialogs.rs:243
+#, rust-format
+msgid "“{name}” is already in “{playlist}”. Add them anyway?"
+msgstr ""
+
+#: src/ui/dialogs.rs:252
+#, rust-format
+msgid "“{first}” and “{second}” are already in “{playlist}”. Add them anyway?"
+msgstr ""
+
+#. Translators: {first} and {second} are song names, {count} is how many more songs are already in the playlist, and {playlist} is a playlist name.
+#: src/ui/dialogs.rs:261
+#, rust-format
+msgid ""
+"“{first}”, “{second}”, and {count} more are already in “{playlist}”. Add "
+"them anyway?"
+msgid_plural ""
+"“{first}”, “{second}”, and {count} more are already in “{playlist}”. Add "
+"them anyway?"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ui/dialogs.rs:336
+msgid "My playlist"
+msgstr ""
+
+#: src/ui/dialogs.rs:341 src/ui/dialogs.rs:344 src/ui/dialogs.rs:529
+#: src/ui/dialogs.rs:538
+msgid "Public playlist"
+msgstr ""
+
+#. Translators: {count} is the number of songs.
+#: src/ui/dialogs.rs:357
+#, rust-format
+msgid "{count} song will be added."
+msgid_plural "{count} songs will be added."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ui/dialogs.rs:375
+msgid "Create"
+msgstr ""
+
+#: src/ui/dialogs.rs:433
+msgid "Selected playlist cover"
+msgstr ""
+
+#: src/ui/dialogs.rs:439
+msgid "Current playlist cover"
+msgstr ""
+
+#: src/ui/dialogs.rs:448
+msgid "Uploading cover…"
+msgstr ""
+
+#: src/ui/dialogs.rs:450
+msgid "Choosing cover…"
+msgstr ""
+
+#: src/ui/dialogs.rs:456
+msgid "Change cover"
+msgstr ""
+
+#: src/ui/dialogs.rs:465
+msgid "Upload cover"
+msgstr ""
+
+#: src/ui/dialogs.rs:491
+msgid "Playlist name"
+msgstr ""
+
+#: src/ui/dialogs.rs:497
+msgid "Description"
+msgstr ""
+
+#: src/ui/dialogs.rs:512
+msgid "Optional description"
+msgstr ""
+
+#: src/ui/dialogs.rs:554
+msgid "Save"
+msgstr ""
+
+#: src/ui/home.rs:207
+msgid "Couldn't load this shelf"
+msgstr ""
+
+#: src/ui/home.rs:445
+msgid "Your podcasts"
+msgstr ""
+
+#. Translators: {time} is the time left in an episode, such as 12 min; {show} is the podcast's name.
+#: src/ui/home.rs:451
+#, rust-format
+msgid "{time} left • {show}"
+msgstr ""
+
+#. Translators: {show} is the podcast's name.
+#: src/ui/home.rs:460
+#, rust-format
+msgid "New • {show}"
+msgstr ""
+
+#: src/ui/home.rs:506 src/ui/home.rs:516 src/ui/home.rs:531
+msgid "Your top artists"
+msgstr ""
+
+#: src/ui/home.rs:654
+msgid "Show more top songs"
+msgstr ""
+
+#: src/ui/home.rs:668
+msgid "Recommended for you"
+msgstr ""
+
+#: src/ui/keys.rs:191
+msgctxt "key"
+msgid "Space"
+msgstr ""
+
+#: src/ui/keys.rs:192
+msgid "Play or pause"
+msgstr ""
+
+#: src/ui/keys.rs:196
+msgid "Previous or next"
+msgstr ""
+
+#: src/ui/keys.rs:200
+msgid "Seek 10 seconds"
+msgstr ""
+
+#: src/ui/keys.rs:204
+msgid "Volume up or down"
+msgstr ""
+
+#: src/ui/keys.rs:206
+msgid "Mute or unmute"
+msgstr ""
+
+#: src/ui/keys.rs:209
+msgid "Like or unlike the playing song"
+msgstr ""
+
+#: src/ui/keys.rs:211
+msgid "Toggle shuffle"
+msgstr ""
+
+#: src/ui/keys.rs:212
+msgid "Cycle repeat"
+msgstr ""
+
+#: src/ui/keys.rs:213
+msgid "Show the queue"
+msgstr ""
+
+#: src/ui/keys.rs:214
+msgid "Show the lyrics"
+msgstr ""
+
+#: src/ui/keys.rs:215
+msgid "Lyrics: leave full screen"
+msgstr ""
+
+#: src/ui/keys.rs:218
+msgid "Song list: extend or shrink the selection"
+msgstr ""
+
+#: src/ui/keys.rs:223
+msgid "Song list: select all"
+msgstr ""
+
+#: src/ui/keys.rs:227
+msgid "Song list: copy the selected songs' links"
+msgstr ""
+
+#: src/ui/keys.rs:231
+msgid "Playlist: cut the selected songs"
+msgstr ""
+
+#: src/ui/keys.rs:235
+msgid "Playlist: add the pasted song links"
+msgstr ""
+
+#. Translators: Keep the key names. Only the word "or" is translated.
+#: src/ui/keys.rs:240
+msgid "Cmd+F  or  /"
+msgstr ""
+
+#. Translators: Keep the key names. Only the word "or" is translated.
+#: src/ui/keys.rs:243
+msgid "Ctrl+F  or  /"
+msgstr ""
+
+#: src/ui/keys.rs:249
+msgid "Show or hide the sidebar"
+msgstr ""
+
+#: src/ui/keys.rs:251
+msgid "Back or forward"
+msgstr ""
+
+#: src/ui/keys.rs:262
+msgid "Go to the playing artist"
+msgstr ""
+
+#: src/ui/keys.rs:266
+msgid "Go to the playing album"
+msgstr ""
+
+#: src/ui/keys.rs:268
+msgid "Winamp mini player"
+msgstr ""
+
+#: src/ui/keys.rs:271
+msgid "MilkDrop, under the mini player"
+msgstr ""
+
+#. Translators: Keep the key name F. Translate "or" and "double-click".
+#: src/ui/keys.rs:275
+msgid "F  or  double-click"
+msgstr ""
+
+#: src/ui/keys.rs:276
+msgid "MilkDrop: fill the screen"
+msgstr ""
+
+#: src/ui/keys.rs:278
+msgid "MilkDrop: next preset"
+msgstr ""
+
+#: src/ui/keys.rs:281
+msgid "MilkDrop: previous preset"
+msgstr ""
+
+#: src/ui/keys.rs:283
+msgid "MilkDrop: keep this preset"
+msgstr ""
+
+#: src/ui/keys.rs:286
+msgid "MilkDrop: leave full screen, or close"
+msgstr ""
+
+#. Translators: Keep the key names. Only the word "or" is translated.
+#: src/ui/keys.rs:295
+msgid "Cmd+/ or ?"
+msgstr ""
+
+#. Translators: Keep the key names. Only the word "or" is translated.
+#: src/ui/keys.rs:298
+msgid "Ctrl+/ or ?"
+msgstr ""
+
+#: src/ui/keys.rs:304
+msgid "Close the window"
+msgstr ""
+
+#: src/ui/keys.rs:306 src/ui/winamp/mod.rs:740
+msgid "Quit"
+msgstr ""
+
+#: src/ui/library.rs:18
+msgid "No saved albums"
+msgstr ""
+
+#: src/ui/library.rs:19
+msgid "Saved albums appear here."
+msgstr ""
+
+#: src/ui/library.rs:23
+msgid "No followed artists"
+msgstr ""
+
+#: src/ui/library.rs:24
+msgid "Followed artists appear here."
+msgstr ""
+
+#: src/ui/library.rs:28
+msgid "No podcasts yet"
+msgstr ""
+
+#: src/ui/library.rs:29
+msgid "Followed podcasts appear here."
+msgstr ""
+
+#: src/ui/library.rs:33
+msgid "No saved episodes"
+msgstr ""
+
+#: src/ui/library.rs:34
+msgid "Saved episodes appear here."
+msgstr ""
+
+#: src/ui/login.rs:73
+msgid "A native music player for Jellyfin."
+msgstr ""
+
+#: src/ui/login.rs:79
+msgid "Signing in…"
+msgstr ""
+
+#: src/ui/login.rs:93
+msgid "Server address"
+msgstr ""
+
+#: src/ui/login.rs:94
+msgid "User name"
+msgstr ""
+
+#: src/ui/login.rs:113
+msgid "Sign in"
+msgstr ""
+
+#: src/ui/login.rs:119
+msgid "Enter your server's address and your user name."
+msgstr ""
+
+#: src/ui/login.rs:128
+msgid ""
+"Your password goes to your Jellyfin server and is never stored. Jellifast "
+"keeps the access token the server returns in the system credential store."
+msgstr ""
+
+#: src/ui/login.rs:141
+msgid "Proxy Settings"
+msgstr ""
+
+#. Translators: {version} is the app's version number, such as 1.2.0.
+#: src/ui/login.rs:162
+#, rust-format
+msgid "Jellifast {version} • not affiliated with the Jellyfin project"
+msgstr ""
+
+#: src/ui/mod.rs:464
+msgid "Minimize"
+msgstr ""
+
+#: src/ui/mod.rs:470
+msgid "Restore"
+msgstr ""
+
+#: src/ui/mod.rs:472
+msgid "Maximize"
+msgstr ""
+
+#: src/ui/radio.rs:105
+msgid "Radio comes from playback on this computer. Turn it on in Settings."
+msgstr ""
+
+#: src/ui/radio.rs:202
+msgid "Based on this playlist"
+msgstr ""
+
+#: src/ui/radio.rs:203
+msgid "Based on this album"
+msgstr ""
+
+#: src/ui/radio.rs:204
+msgid "Based on this artist"
+msgstr ""
+
+#: src/ui/radio.rs:205
+msgid "Based on this song"
+msgstr ""
+
+#. Translators: {first} is an artist name.
+#: src/ui/radio.rs:224
+#, rust-format
+msgid "With {first}"
+msgstr ""
+
+#. Translators: {first} and {second} are artist names.
+#: src/ui/radio.rs:227
+#, rust-format
+msgid "With {first} and {second}"
+msgstr ""
+
+#. Translators: {first}, {second} and {third} are artist names.
+#: src/ui/radio.rs:233
+#, rust-format
+msgid "With {first}, {second} and {third}"
+msgstr ""
+
+#. Translators: {first}, {second} and {third} are artist names; more follow.
+#: src/ui/radio.rs:240
+#, rust-format
+msgid "With {first}, {second}, {third} and more"
+msgstr ""
+
+#. Translators: {query} is the text the user searched for.
+#: src/ui/search.rs:66
+#, rust-format
+msgid "No results for “{query}”"
+msgstr ""
+
+#: src/ui/search.rs:68
+msgid "Check the spelling, or try fewer words."
+msgstr ""
+
+#: src/ui/search.rs:91 src/ui/winamp/playlist.rs:647
+msgid "Search your library"
+msgstr ""
+
+#: src/ui/search.rs:94
+msgid "Find songs, artists, albums, playlists, and podcasts."
+msgstr ""
+
+#: src/ui/search.rs:99
+msgid "Recent searches"
+msgstr ""
+
+#: src/ui/search.rs:137
+msgid "Top result"
+msgstr ""
+
+#. Translators: {artists} is the album's artist names.
+#: src/ui/search.rs:188
+#, rust-format
+msgid "Album • {artists}"
+msgstr ""
+
+#. Translators: Precedes the song's artist names, which follow as links.
+#: src/ui/search.rs:349
+msgid "Song • "
+msgstr ""
+
+#. Translators: {owner} is the name of the playlist's owner.
+#: src/ui/search.rs:602
+#, rust-format
+msgid "By {owner}"
+msgstr ""
+
+#: src/ui/show.rs:49
+msgid "All episodes"
+msgstr ""
+
+#. Translators: {count} is the number of episodes of a podcast.
+#: src/ui/show.rs:105
+#, rust-format
+msgid "{count} episode"
+msgid_plural "{count} episodes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ui/show.rs:155
+msgid "Play latest episode"
+msgstr ""
+
+#: src/ui/show.rs:169
+msgid "Remove from Your Library"
+msgstr ""
+
+#: src/ui/show.rs:175
+msgid "Follow podcast"
+msgstr ""
+
+#. Translators: {duration} is the time left in an episode, such as "12 min".
+#: src/ui/show.rs:339
+#, rust-format
+msgid "{duration} left"
+msgstr ""
+
+#: src/ui/show.rs:361
+msgid "Played"
+msgstr ""
+
+#: src/ui/topbar.rs:232
+msgid "Show sidebar (Ctrl+B)"
+msgstr ""
+
+#: src/ui/topbar.rs:233
+msgid "Show sidebar (Cmd+B)"
+msgstr ""
+
+#: src/ui/topbar.rs:252
+msgid "Back"
+msgstr ""
+
+#: src/ui/topbar.rs:263
+msgid "Forward"
+msgstr ""
+
+#. Translators: {device} is the name of the device playing the music.
+#: src/ui/topbar.rs:277
+#, rust-format
+msgid "Playing on {device}"
+msgstr ""
+
+#: src/ui/topbar.rs:279
+msgid "Playing on another device"
+msgstr ""
+
+#: src/ui/topbar.rs:288
+msgid "Update ready"
+msgstr ""
+
+#: src/ui/topbar.rs:291 src/ui/update.rs:74
+msgid "Downloading update…"
+msgstr ""
+
+#. Translators: {version} is a version number such as 1.2.0.
+#: src/ui/topbar.rs:295
+#, rust-format
+msgid "Update to {version}"
+msgstr ""
+
+#: src/ui/topbar.rs:334
+msgid "What do you want to play?"
+msgstr ""
+
+#: src/ui/topbar.rs:477
+msgid "MilkDrop visualiser (Ctrl+Shift+K)"
+msgstr ""
+
+#: src/ui/topbar.rs:478
+msgid "MilkDrop visualiser (Cmd+Shift+K)"
+msgstr ""
+
+#: src/ui/topbar.rs:492
+msgid "Winamp mini player (Ctrl+M)"
+msgstr ""
+
+#: src/ui/topbar.rs:493
+msgid "Winamp mini player (Cmd+Shift+M)"
+msgstr ""
+
+#: src/ui/topbar.rs:504
+msgid "Waiting for the server…"
+msgstr ""
+
+#. Translators: {version} is a version number such as 1.2.0.
+#: src/ui/topbar.rs:541
+#, rust-format
+msgid "Version {version} is available."
+msgstr ""
+
+#: src/ui/update.rs:19
+msgid "Update Jellifast"
+msgstr ""
+
+#: src/ui/update.rs:51
+msgid "Close update"
+msgstr ""
+
+#: src/ui/update.rs:65
+msgid "Release notes"
+msgstr ""
+
+#: src/ui/update.rs:72
+msgid "Checking download…"
+msgstr ""
+
+#. Translators: {received} and {total} are sizes in megabytes, such as 12.5.
+#: src/ui/update.rs:90
+#, rust-format
+msgid "{received} of {total} MB"
+msgstr ""
+
+#: src/ui/update.rs:106
+msgid "Ready to install"
+msgstr ""
+
+#: src/ui/update.rs:115
+msgid "Music playing on this computer will stop when Jellifast restarts."
+msgstr ""
+
+#: src/ui/update.rs:122
+msgid "Restart to update"
+msgstr ""
+
+#: src/ui/update.rs:129
+msgid "Preparing to restart…"
+msgstr ""
+
+#: src/ui/update.rs:160
+msgid "Download from GitHub"
+msgstr ""
+
+#: src/ui/update.rs:165
+msgid "Retry download"
+msgstr ""
+
+#: src/ui/update.rs:167
+msgid "Download update"
+msgstr ""
+
+#: src/ui/winamp/equalizer.rs:59
+msgid "Roll the equalizer up"
+msgstr ""
+
+#: src/ui/winamp/equalizer.rs:225
+msgid "Roll the equalizer down"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:420 src/ui/winamp/mod.rs:467 src/ui/winamp/mod.rs:634
+msgid "Back to the big window (Ctrl+M)"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:421 src/ui/winamp/mod.rs:465 src/ui/winamp/mod.rs:632
+msgid "Back to the big window (Cmd+Shift+M)"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:499
+msgid "Roll the window down"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:666
+msgid "Roll the window up"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:731
+msgid "Choose a skin"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:737
+msgid "Big window"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:870 src/ui/winamp/playlist.rs:716
+#: src/ui/winamp/playlist.rs:721
+msgid "Song info"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:891
+msgid "Size: 2x, 3x, 4x"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:910
+msgid "Visualisation"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:914
+msgid "Spectrum analyser"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:915
+msgid "Oscilloscope"
+msgstr ""
+
+#. Translators: The visualiser choice that shows no visualisation.
+#: src/ui/winamp/mod.rs:917
+msgctxt "visualiser"
+msgid "Nothing"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:1048
+msgid "Play in mono"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:1056
+msgid "Play in stereo"
+msgstr ""
+
+#. Translators: {percent} is a number from 0 to 100, followed by a percent sign.
+#: src/ui/winamp/mod.rs:1147
+#, rust-format
+msgid "Balance: {percent}% left"
+msgstr ""
+
+#. Translators: {percent} is a number from 0 to 100, followed by a percent sign.
+#: src/ui/winamp/mod.rs:1152
+#, rust-format
+msgid "Balance: {percent}% right"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:1155
+msgid "Balance: center"
+msgstr ""
+
+#. Translators: {percent} is a number from 0 to 100, followed by a percent sign.
+#: src/ui/winamp/mod.rs:1160
+#, rust-format
+msgid "Volume: {percent}%"
+msgstr ""
+
+#. Translators: {position} and {duration} are times such as 2:12, {percent} a number from 0 to 100.
+#: src/ui/winamp/mod.rs:1176
+#, rust-format
+msgid "Seek to: {position}/{duration} ({percent}%)"
+msgstr ""
+
+#: src/ui/winamp/mod.rs:1508
+msgid "Open the big window"
+msgstr ""
+
+#: src/ui/winamp/playlist.rs:663
+msgid "Remove selected"
+msgstr ""
+
+#: src/ui/winamp/playlist.rs:665
+msgid "One queued song cannot be removed yet."
+msgstr ""
+
+#: src/ui/winamp/playlist.rs:669
+msgid "Remove all"
+msgstr ""
+
+#: src/ui/winamp/playlist.rs:672
+msgid "You can only clear this computer's queue."
+msgstr ""
+
+#. Translators: Selects every song in the list.
+#: src/ui/winamp/playlist.rs:683
+msgctxt "selection"
+msgid "All"
+msgstr ""
+
+#. Translators: Clears the selection of songs in the list.
+#: src/ui/winamp/playlist.rs:685
+msgctxt "selection"
+msgid "None"
+msgstr ""
+
+#. Translators: Selects the songs that are not selected, and clears the rest.
+#: src/ui/winamp/playlist.rs:687
+msgctxt "selection"
+msgid "Invert"
+msgstr ""
+
+#: src/ui/winamp/playlist.rs:748
+msgid "Load list"
+msgstr ""
+
+#: src/ui/winamp/playlist.rs:757
+msgid "No playlists yet"
+msgstr ""
+
+#: src/ui/winamp/playlist.rs:777
+msgid "Save list"
+msgstr ""
+
+#: src/ui/winamp/playlist.rs:779
+msgid "Save the queue as a new playlist"
+msgstr ""
+
+#. Translators: A length of time, abbreviated. Keep {hours} and {minutes}.
+#: src/util.rs:28 src/util.rs:47
+#, rust-format
+msgid "{hours} hr {minutes} min"
+msgstr ""
+
+#. Translators: A length of time, abbreviated. Keep {minutes} and {seconds}.
+#: src/util.rs:33
+#, rust-format
+msgid "{minutes} min {seconds} sec"
+msgstr ""
+
+#. Translators: A length of time, abbreviated. Keep {seconds}.
+#: src/util.rs:38
+#, rust-format
+msgid "{seconds} sec"
+msgstr ""
+
+#. Translators: A length of time, abbreviated. Keep {minutes}.
+#: src/util.rs:52
+#, rust-format
+msgid "{minutes} min"
+msgstr ""
+
+#: src/util.rs:77
+msgctxt "month"
+msgid "Jan"
+msgstr ""
+
+#: src/util.rs:78
+msgctxt "month"
+msgid "Feb"
+msgstr ""
+
+#: src/util.rs:79
+msgctxt "month"
+msgid "Mar"
+msgstr ""
+
+#: src/util.rs:80
+msgctxt "month"
+msgid "Apr"
+msgstr ""
+
+#: src/util.rs:81
+msgctxt "month"
+msgid "May"
+msgstr ""
+
+#: src/util.rs:82
+msgctxt "month"
+msgid "Jun"
+msgstr ""
+
+#: src/util.rs:83
+msgctxt "month"
+msgid "Jul"
+msgstr ""
+
+#: src/util.rs:84
+msgctxt "month"
+msgid "Aug"
+msgstr ""
+
+#: src/util.rs:85
+msgctxt "month"
+msgid "Sep"
+msgstr ""
+
+#: src/util.rs:86
+msgctxt "month"
+msgid "Oct"
+msgstr ""
+
+#: src/util.rs:87
+msgctxt "month"
+msgid "Nov"
+msgstr ""
+
+#: src/util.rs:88
+msgctxt "month"
+msgid "Dec"
+msgstr ""
+
+#. Translators: A date. {month} is an abbreviated month name; reorder as your language writes dates.
+#: src/util.rs:94
+#, rust-format
+msgid "{month} {day}, {year}"
+msgstr ""
+
+#. Translators: A month and year. {month} is an abbreviated month name.
+#: src/util.rs:97
+#, rust-format
+msgid "{month} {year}"
+msgstr ""
+
+#. Translators: How long ago a song was added. Keep {count}.
+#: src/util.rs:123
+#, rust-format
+msgid "{count} second ago"
+msgid_plural "{count} seconds ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: How long ago a song was added. Keep {count}.
+#: src/util.rs:133
+#, rust-format
+msgid "{count} minute ago"
+msgid_plural "{count} minutes ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: How long ago a song was added. Keep {count}.
+#: src/util.rs:143
+#, rust-format
+msgid "{count} hour ago"
+msgid_plural "{count} hours ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: How long ago a song was added. Keep {count}.
+#: src/util.rs:151
+#, rust-format
+msgid "{count} day ago"
+msgid_plural "{count} days ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: How long ago a song was added. Keep {count}.
+#: src/util.rs:158
+#, rust-format
+msgid "{count} week ago"
+msgid_plural "{count} weeks ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/util.rs:315
+msgid "Good morning"
+msgstr ""
+
+#: src/util.rs:316
+msgid "Good afternoon"
+msgstr ""
+
+#: src/util.rs:317
+msgid "Good evening"
+msgstr ""
+
+#: src/window.rs:12
+msgid "On Wayland, use your desktop's Keep Above shortcut or window rule."
+msgstr ""

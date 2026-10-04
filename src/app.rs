@@ -95,8 +95,6 @@ struct PlaylistDetailChanges {
     name: Option<String>,
     description: Option<String>,
     public: Option<bool>,
-    /// The description was cleared, which Spotify doesn't allow.
-    kept_description: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -255,7 +253,7 @@ pub struct App {
     /// The window should close and reopen at once as the other kind: the
     /// big window or the Winamp mini player.
     pub switch_intent: bool,
-    /// Commands from control clients (a second `spotifast <verb>` launch,
+    /// Commands from control clients (a second `jellifast <verb>` launch,
     /// a Raycast script, a link the desktop opens). Drained every frame.
     control_commands: Option<std::sync::Arc<std::sync::Mutex<Vec<ControlCommand>>>>,
     /// Now-playing snapshot for the control channel.
@@ -314,11 +312,9 @@ pub struct App {
     /// pushed on the first frames after mapping does.
     winamp_level_reassert: u8,
     pub devices: Vec<Device>,
-    /// Receivers seen on the local network. Spotify lists a receiver only
-    /// once it has an account, so these are the ones it cannot see yet.
-    pub receivers: Vec<crate::zeroconf::Receiver>,
-    /// The receiver currently being handed the account, by name.
-    pub activating_receiver: Option<String>,
+    /// What the sign-in form holds. The password leaves it when a sign-in
+    /// is sent, and is never stored.
+    pub login: LoginForm,
     pub devices_loading: bool,
     devices_fetched_at: Option<Instant>,
     pub selected_device: Option<String>,
@@ -366,14 +362,9 @@ pub struct App {
     pub radio_pages: HashMap<String, RadioPage>,
     pub track_cache: HashMap<String, Track>,
     track_requests: HashSet<String>,
-    /// Album URIs already resolved or attempted through librespot this session.
-    album_types_requested: HashSet<String>,
-    /// Saved shows Spotify marks as audiobooks, which librespot cannot play;
-    /// the Podcasts shelf leaves them out.
+    /// Shows left out of the Podcasts shelf.
     pub audiobook_shows: HashSet<String>,
-    /// Saved shows already asked about.
-    audiobooks_requested: HashSet<String>,
-    /// Album URIs positively identified as EPs by librespot.
+    /// Album URIs known to be EPs.
     confirmed_ep_albums: HashSet<String>,
     /// Built table rows, keyed by page. Capped; dropped on reset and eviction.
     pub table_rows: HashMap<Page, TableRowsCache>,
@@ -463,9 +454,6 @@ pub struct App {
     last_eviction: Instant,
     /// Playback snapshot for the current frame, built once per redraw.
     frame_now: Option<NowPlaying>,
-    pub sign_in_url: Option<String>,
-    /// The verified personal Web API application, when acceleration is ready.
-    pub web_app: Option<String>,
     pending_remote_position: Option<(u32, Instant)>,
     pending_remote_volume: Option<(u8, Instant)>,
     /// A local volume set here that the engine has not echoed back yet. It
@@ -481,12 +469,6 @@ pub struct App {
     shuffle_wanted: bool,
     /// Last local shuffle change, used to ignore its echo from the engine.
     shuffle_set_at: Option<Instant>,
-    /// When tracks recently came up unavailable, to spot a key-service
-    /// cascade and reconnect once instead of skipping through an album.
-    unavailable_at: Vec<Instant>,
-    last_unavailable_reconnect: Option<Instant>,
-    /// The Premium notice has been shown for this sign-in.
-    premium_notice_shown: bool,
     /// Context shown immediately after play, until Spotify confirms it. An
     /// empty URI means a plain track list, whose lack of a context must also
     /// hide stale state.
@@ -575,11 +557,11 @@ const HOME_PODCAST_SHOWS: usize = 8;
 /// endpoint limit is fifty. A shorter page marks the end.
 const RECENTS_PAGE: u32 = 50;
 
-/// Who the desktop's media controls belong to. Links to Spotify, as
-/// `spotify:` URIs or web addresses, are what they may ask Spotifast to open.
+/// Who the desktop's media controls belong to. `jellifast:` links are what
+/// they may ask Jellifast to open.
 fn media_app() -> fastframe_now_playing::App {
-    let mut app = fastframe_now_playing::App::new("spotifast", "Spotifast");
-    app.uri_schemes = vec!["spotify".into(), "https".into(), "http".into()];
+    let mut app = fastframe_now_playing::App::new("jellifast", "Jellifast");
+    app.uri_schemes = vec!["jellifast".into()];
     app
 }
 
@@ -634,19 +616,19 @@ fn play_pause_label(playing: bool) -> &'static str {
     if playing { "Pause" } else { "Play" }
 }
 
-/// The tray item: Spotifast's icon, and a menu that shows or hides the
+/// The tray item: Jellifast's icon, and a menu that shows or hides the
 /// window, controls playback and quits.
 fn tray_config() -> fastframe_tray::Config {
     use fastframe_tray::MenuItem;
     fastframe_tray::Config {
-        id: "spotifast",
-        title: "Spotifast".into(),
+        id: "jellifast",
+        title: "Jellifast".into(),
         icon: util::app_icon_rgba,
         template_icon: Some(util::tray_template_rgba),
         themed_icon: true,
         menu_on_click: false,
         menu: vec![
-            MenuItem::action(TRAY_SHOW, "Show or hide Spotifast"),
+            MenuItem::action(TRAY_SHOW, "Show or hide Jellifast"),
             MenuItem::Separator,
             MenuItem::action(TRAY_PLAY_PAUSE, play_pause_label(false)),
             MenuItem::action(TRAY_NEXT, "Next"),
@@ -680,10 +662,14 @@ impl App {
             std::sync::Arc::clone(&tap),
             std::sync::Arc::clone(&eq),
         );
+        let login = LoginForm {
+            server: settings.server.clone(),
+            username: settings.username.clone(),
+            password: String::new(),
+        };
         let backend = Backend::spawn(
             dirs.clone(),
             engine_config,
-            settings.web_client_id.clone(),
             waker.clone(),
             options.restore_sign_in,
         );
@@ -787,8 +773,7 @@ impl App {
             zoom_applied: false,
             winamp_level_reassert: 0,
             devices: Vec::new(),
-            receivers: Vec::new(),
-            activating_receiver: None,
+            login,
             devices_loading: false,
             devices_fetched_at: None,
             selected_device: None,
@@ -834,9 +819,7 @@ impl App {
             radio_pages: HashMap::new(),
             track_cache: HashMap::new(),
             track_requests: HashSet::new(),
-            album_types_requested: HashSet::new(),
             audiobook_shows: HashSet::new(),
-            audiobooks_requested: HashSet::new(),
             confirmed_ep_albums: HashSet::new(),
             table_rows: HashMap::new(),
             page_used: HashMap::new(),
@@ -890,8 +873,6 @@ impl App {
             milkdrop_host: None,
             last_eviction: Instant::now(),
             frame_now: None,
-            sign_in_url: None,
-            web_app: None,
             pending_remote_position: None,
             pending_remote_volume: None,
             pending_local_volume: None,
@@ -900,9 +881,6 @@ impl App {
             intent_track: None,
             shuffle_wanted: session.shuffle_on,
             shuffle_set_at: None,
-            unavailable_at: Vec::new(),
-            last_unavailable_reconnect: None,
-            premium_notice_shown: false,
             assumed_context: None,
             last_now_playing_uri: None,
             last_now_playing_sequence: 0,
@@ -977,7 +955,7 @@ impl App {
         self.wants_show = false;
         self.switch_intent = false;
         self.winamp_level_reassert = 0;
-        // A new window starts titled "Spotifast"; name the playing song
+        // A new window starts titled "Jellifast"; name the playing song
         // again rather than trust what the replaced window was told.
         self.window_title.clear();
         if let Some(tray) = &mut self.tray {
@@ -1657,13 +1635,6 @@ impl App {
                     .and_then(|results| results.playlists.as_ref())
                     .and_then(|playlists| playlists.items.iter().find(|playlist| playlist.id == id))
             })
-            .or_else(|| {
-                self.home.discover.values().find_map(|playlists| {
-                    playlists
-                        .get()
-                        .and_then(|playlists| playlists.iter().find(|playlist| playlist.id == id))
-                })
-            })
     }
 
     pub fn known_album(&self, id: &str) -> Option<&Album> {
@@ -1839,24 +1810,19 @@ impl App {
                     self.cover_chosen(&id, request, result);
                 }
                 Event::Auth(status) => self.handle_auth(status),
-                Event::Playback(status) => self.handle_playback(status),
-                Event::Receivers(receivers) => self.receivers = receivers,
-                Event::ReceiverActivated { name, result } => {
-                    self.activating_receiver = None;
-                    match result {
-                        Ok(()) => {
-                            self.toast(
-                                // Translators: {name} is the name of a speaker or other playback device.
-                                gettext(self.locale, "{name} is ready").replace("{name}", &name),
-                            );
-                            // It takes a moment to appear in the device list.
-                            self.pending_transfer_to = Some((name, Instant::now()));
-                            self.devices_fetched_at = None;
-                            self.refresh_devices();
-                        }
-                        Err(error) => self.toast_error(format!("{name}: {error}")),
+                Event::Server { address, username } => {
+                    // The address as the server answered on it, so the form
+                    // and the links to its web interface use the full one.
+                    if self.settings.server != address || self.settings.username != username {
+                        self.settings.server = address.clone();
+                        self.settings.username = username.clone();
+                        self.settings_dirty = true;
                     }
+                    self.login.server = address;
+                    self.login.username = username;
+                    self.login.password.clear();
                 }
+                Event::Playback(status) => self.handle_playback(status),
                 Event::Local(state) => self.handle_local(*state),
                 Event::Api(response) => self.handle_api(*response),
                 Event::Accent { url, color } => {
@@ -1887,27 +1853,6 @@ impl App {
                     result,
                 } => self.handle_proxy_applied(request, config, result),
                 Event::Error(message) => self.toast_error(message),
-                Event::Rootlist { result } => match result {
-                    Ok(rootlist) => {
-                        let account_id = self.user_id().map(str::to_owned).or_else(|| {
-                            if let AuthStatus::Connected { username } = &self.auth {
-                                Some(username.clone())
-                            } else {
-                                None
-                            }
-                        });
-                        self.rootlist = rootlist.entries;
-                        self.editable_by_grant = rootlist.editable;
-                        if let Some(account_id) = account_id {
-                            self.rootlist_cache = Some(CachedRootlist {
-                                account_id,
-                                entries: self.rootlist.clone(),
-                            });
-                            self.session_dirty = true;
-                        }
-                    }
-                    Err(error) => log::warn!("rootlist unavailable: {error}"),
-                },
                 Event::Lyrics { uri, result } => {
                     if self.lyrics_uri.as_deref() == Some(uri.as_str()) {
                         self.lyrics = match result {
@@ -1946,25 +1891,11 @@ impl App {
                 } => {
                     self.receive_liked_cache(&account_id, generation, cache);
                 }
-                Event::UserName { id, name } => {
-                    self.set_user_name(id, name);
-                }
-                Event::AudiobookShows(uris) => {
-                    self.audiobook_shows.extend(uris);
-                }
                 Event::Radio {
                     seed,
                     generation,
                     result,
                 } => self.receive_radio(&seed, generation, result),
-                Event::AlbumType { uri, result } => match result {
-                    Ok(true) => {
-                        self.confirmed_ep_albums.insert(uri);
-                    }
-                    Ok(false) => {}
-                    Err(error) => log::debug!("album type unavailable for {uri}: {error}"),
-                },
-                Event::WebApp { client_id } => self.web_app = client_id,
                 Event::UpdateSupport(result) => {
                     if result.is_ok()
                         && self.settings.download_updates_automatically
@@ -1997,7 +1928,7 @@ impl App {
                             if manual || self.update.as_ref() != Some(&notice) {
                                 self.toast(
                                     // Translators: {version} is a version number such as 1.4.0.
-                                    gettext(self.locale, "Spotifast {version} is available")
+                                    gettext(self.locale, "Jellifast {version} is available")
                                         .replace("{version}", &notice.version.to_string()),
                                 );
                             }
@@ -2014,7 +1945,7 @@ impl App {
                         Ok(None) => {
                             self.update = None;
                             if manual {
-                                self.toast(gettext(self.locale, "Spotifast is up to date"));
+                                self.toast(gettext(self.locale, "Jellifast is up to date"));
                             } else {
                                 log::debug!("this is the newest release");
                             }
@@ -2038,22 +1969,14 @@ impl App {
     fn handle_auth(&mut self, status: AuthStatus) {
         match &status {
             AuthStatus::Connected { .. } => {
-                self.sign_in_url = None;
                 self.reset_data();
                 self.load_playlists();
                 self.ensure_loaded(self.page().clone());
                 self.poll_remote(true);
             }
-            AuthStatus::WaitingForBrowser { url } => self.sign_in_url = Some(url.clone()),
             AuthStatus::SignedOut => {
-                if matches!(self.dialog, Some(Dialog::PersonalAppIntro)) {
-                    self.dialog = None;
-                }
                 self.uploaded_covers.clear();
-                self.sign_in_url = None;
-                self.web_app = None;
                 self.user = None;
-                self.premium_notice_shown = false;
                 self.local = LocalState::default();
                 self.local_ready = false;
                 self.local_device_id = None;
@@ -2066,7 +1989,6 @@ impl App {
                 self.reset_data();
             }
             AuthStatus::Failed(message) => {
-                self.sign_in_url = None;
                 self.toast_error(message.clone());
             }
             _ => {}
@@ -2098,7 +2020,6 @@ impl App {
                     gettext(self.locale, "Local playback: {error}").replace("{error}", message),
                 );
             }
-            LocalPlayback::Authorizing | LocalPlayback::Connecting => {}
         }
         self.local_playback = status;
     }
@@ -2123,9 +2044,7 @@ impl App {
         self.album_pages.clear();
         self.artist_pages.clear();
         self.show_pages.clear();
-        self.album_types_requested.clear();
         self.audiobook_shows.clear();
-        self.audiobooks_requested.clear();
         self.confirmed_ep_albums.clear();
         self.saved.clear();
         self.saved_pending.clear();
@@ -2253,29 +2172,6 @@ impl App {
             && self.local.error.as_deref() != Some(error.as_str())
         {
             self.toast_error(engine_error_text(self.locale, error));
-            // One unavailable track is Spotify's catalogue; several in a
-            // row is the session's audio-key service gone bad, which
-            // leaves librespot feeding the decoder encrypted bytes and
-            // skipping through the whole album. A fresh session cures it.
-            if error.starts_with("This item isn't available") {
-                let now = Instant::now();
-                self.unavailable_at
-                    .retain(|at| now.duration_since(*at) < Duration::from_secs(20));
-                self.unavailable_at.push(now);
-                if self.unavailable_at.len() >= 3
-                    && self
-                        .last_unavailable_reconnect
-                        .is_none_or(|at| at.elapsed() > Duration::from_secs(60))
-                {
-                    self.unavailable_at.clear();
-                    self.last_unavailable_reconnect = Some(now);
-                    self.backend.send(Command::Reconnect);
-                    self.toast(gettext(
-                        self.locale,
-                        "Spotify audio disconnected. Reconnecting local playback",
-                    ));
-                }
-            }
         }
         if let Some(seed) = autoplay_seed(
             self.local_list.as_deref(),
@@ -2283,7 +2179,7 @@ impl App {
             &self.local,
             &state,
         ) {
-            log::info!("the list ended; playing what Spotify follows {seed} with");
+            log::info!("the list ended; playing the server's mix of {seed}");
             self.local_list = None;
             self.backend.player(PlayerCommand::Load(LoadSpec {
                 context_uri: Some(seed),
@@ -2326,7 +2222,7 @@ impl App {
             return;
         };
         // Episodes are not in the track endpoint; the preview skips them.
-        if !uri.starts_with("spotify:track:") {
+        if !uri.starts_with("jellyfin:track:") {
             return;
         }
         let Some(id) = util::uri_id(&uri).map(str::to_string) else {
@@ -2375,7 +2271,7 @@ impl App {
                 page: Some(Page::LikedSongs),
             });
         }
-        if context.starts_with("spotify:station:") {
+        if context.starts_with("jellyfin:station:") {
             return Some(PlayingFrom {
                 name: self
                     .station_name(&context)
@@ -2525,7 +2421,7 @@ impl App {
             self.track_used.insert(id.to_owned(), Instant::now());
             return;
         }
-        let found = if let Some(pid) = context_uri.strip_prefix("spotify:playlist:") {
+        let found = if let Some(pid) = context_uri.strip_prefix("jellyfin:playlist:") {
             self.playlist_pages.get(pid).and_then(|page| {
                 page.items
                     .items
@@ -2535,7 +2431,7 @@ impl App {
                         _ => None,
                     })
             })
-        } else if let Some(aid) = context_uri.strip_prefix("spotify:album:") {
+        } else if let Some(aid) = context_uri.strip_prefix("jellyfin:album:") {
             self.album_pages.get(aid).and_then(|page| {
                 page.tracks
                     .items
@@ -2748,7 +2644,6 @@ impl App {
         }
         self.toasts
             .retain(|toast| toast.created.elapsed() < TOAST_LIFETIME);
-        self.maybe_suggest_personal_app();
 
         if self.settings.check_for_updates
             && !self.offline
@@ -3080,7 +2975,20 @@ impl App {
         self.pending_proxy_preferences
             .insert(request, self.settings.proxy_preferences());
         self.backend.send(if sign_in {
-            Command::SignIn { request, config }
+            // The form's address and name fill it again next time; the
+            // password goes to the server and nowhere else.
+            self.settings.server = self.login.server.trim().to_string();
+            self.settings.username = self.login.username.trim().to_string();
+            self.settings_dirty = true;
+            Command::SignIn {
+                request,
+                config,
+                login: Box::new(crate::auth::Login {
+                    server: self.login.server.clone(),
+                    username: self.login.username.clone(),
+                    password: std::mem::take(&mut self.login.password),
+                }),
+            }
         } else {
             Command::ApplyProxy { request, config }
         });
@@ -3676,7 +3584,7 @@ impl App {
                         generation,
                     });
                 }
-                self.request_contains(vec![format!("spotify:playlist:{id}")]);
+                self.request_contains(vec![format!("jellyfin:playlist:{id}")]);
             }
             Page::Album(id) => {
                 if !self.album_pages.contains_key(&id) {
@@ -3694,7 +3602,7 @@ impl App {
                     page.album = Loadable::Loading;
                     self.backend.api(ApiRequest::Album { id: id.clone() });
                 }
-                self.request_contains(vec![format!("spotify:album:{id}")]);
+                self.request_contains(vec![format!("jellyfin:album:{id}")]);
             }
             Page::Artist(id) => {
                 let page = self.artist_pages.entry(id.clone()).or_default();
@@ -3711,7 +3619,7 @@ impl App {
                     self.backend
                         .api(ApiRequest::RelatedArtists { id: id.clone() });
                 }
-                self.request_contains(vec![format!("spotify:artist:{id}")]);
+                self.request_contains(vec![format!("jellyfin:artist:{id}")]);
             }
             Page::Show(id) => {
                 let page = self.show_pages.entry(id.clone()).or_default();
@@ -3719,7 +3627,7 @@ impl App {
                     page.show = Loadable::Loading;
                     self.backend.api(ApiRequest::Show { id: id.clone() });
                 }
-                self.request_contains(vec![format!("spotify:show:{id}")]);
+                self.request_contains(vec![format!("jellyfin:show:{id}")]);
             }
             Page::Radio(seed) => self.load_radio(&seed),
             Page::Queue => self.refresh_queue(true),
@@ -3777,21 +3685,10 @@ impl App {
             full: false,
             generation,
         });
-        self.home.discover_pending.clear();
-        for term in DISCOVER_TERMS {
-            self.home
-                .discover_pending
-                .insert((*term).to_string(), Loadable::Loading);
-            if !self.home.discover.contains_key(*term) {
-                self.home
-                    .discover
-                    .insert((*term).to_string(), Loadable::Loading);
-            }
-            self.backend.api(ApiRequest::Discover {
-                term: (*term).to_string(),
-                generation,
-            });
+        if self.home.latest_albums.get().is_none() {
+            self.home.latest_albums = Loadable::Loading;
         }
+        self.backend.api(ApiRequest::LatestAlbums { generation });
         // The podcast shelf reads from the saved shows. The first page of
         // them is the one the Podcasts shelf of the library asks for.
         if self.library.shows.loaded_once {
@@ -4614,24 +4511,14 @@ impl App {
         if unknown.is_empty() {
             return;
         }
-        for id in &unknown {
-            self.user_names.insert(id.clone(), None);
-        }
-        self.backend.send(Command::UserNames(unknown));
-    }
-
-    fn request_album_types<'a>(&mut self, albums: impl IntoIterator<Item = &'a Album>) {
-        let mut uris = Vec::new();
-        for album in albums {
-            if album.is_single_release()
-                && !album.uri.is_empty()
-                && self.album_types_requested.insert(album.uri.clone())
-            {
-                uris.push(album.uri.clone());
-            }
-        }
-        if !uris.is_empty() {
-            self.backend.album_types(uris);
+        // The only name a Jellyfin playlist row carries is this account's.
+        for id in unknown {
+            let name = self
+                .user
+                .as_ref()
+                .filter(|user| user.id == id)
+                .map(|user| user.name().to_string());
+            self.user_names.insert(id, name);
         }
     }
 
@@ -4641,7 +4528,7 @@ impl App {
             if uri.is_empty()
                 || self.saved.contains_key(&uri)
                 || self.saved_pending.contains(&uri)
-                || uri.starts_with("spotify:local")
+                || uri.starts_with("jellyfin:local")
             {
                 continue;
             }
@@ -4814,17 +4701,6 @@ impl App {
         match response {
             ApiResponse::Me(result) => match result {
                 Ok(user) => {
-                    // Spotify only takes playback commands from Premium
-                    // accounts, here or on any device, so a Free account
-                    // is told once rather than left pressing play.
-                    let free = user
-                        .product
-                        .as_deref()
-                        .is_some_and(|product| product != "premium");
-                    if free && !self.premium_notice_shown {
-                        self.premium_notice_shown = true;
-                        self.dialog = Some(Dialog::PremiumNeeded);
-                    }
                     if self.user_id() != Some(user.id.as_str()) {
                         self.rootlist = self
                             .rootlist_cache
@@ -4842,13 +4718,10 @@ impl App {
                     }
                 }
                 Err(error) => {
-                    if matches!(error, crate::api::ApiError::SignInExpired { .. }) {
+                    if matches!(error, crate::api::ApiError::SignInExpired) {
                         self.auth = AuthStatus::Failed(
-                            gettext(
-                                self.locale,
-                                "Your Spotify sign-in expired. Please sign in again.",
-                            )
-                            .into_owned(),
+                            gettext(self.locale, "Your sign-in expired. Please sign in again.")
+                                .into_owned(),
                         );
                     } else {
                         self.toast_error(
@@ -5134,40 +5007,11 @@ impl App {
                 }
                 self.home.recommendations.refresh(result);
             }
-            ApiResponse::Discover {
-                term,
-                generation,
-                result,
-            } => {
+            ApiResponse::LatestAlbums { generation, result } => {
                 if generation != self.home.generation {
                     return;
                 }
-                let filtered = result.map(|playlists| {
-                    let mut seen = std::collections::HashSet::new();
-                    let mut matching: Vec<Playlist> = playlists
-                        .into_iter()
-                        .filter(|playlist| {
-                            let owner = playlist.owner.id.as_deref().unwrap_or("");
-                            is_made_for_you(&playlist.name, &term)
-                                && (owner == "spotify" || playlist.owner_name() == "Spotify")
-                                && seen.insert(playlist.name.to_lowercase())
-                        })
-                        .collect();
-                    matching.truncate(6);
-                    matching
-                });
-                self.home
-                    .discover_pending
-                    .insert(term, Loadable::from_result(filtered));
-                let complete = DISCOVER_TERMS.iter().all(|term| {
-                    self.home
-                        .discover_pending
-                        .get(*term)
-                        .is_some_and(|result| !result.is_loading())
-                });
-                if complete {
-                    self.home.discover = std::mem::take(&mut self.home.discover_pending);
-                }
+                self.home.latest_albums.refresh(result);
             }
             // A reload reads the playlists from the top again under a new
             // generation, so a page any earlier load asked for no longer
@@ -5188,9 +5032,6 @@ impl App {
                     self.library.playlists_next = next_offset;
                     if next_offset.is_some() {
                         self.load_more(Page::Home);
-                    } else {
-                        // Load folder order after all playlists arrive.
-                        self.backend.send(Command::Rootlist);
                     }
                     if let Some(playlists) = self.library.playlists.get() {
                         for listed in playlists {
@@ -5261,7 +5102,7 @@ impl App {
                         page.items.fail(
                             gettext(
                                 self.locale,
-                                "Spotify hasn't confirmed your playlist changes yet. Try refreshing again.",
+                                "The server hasn't confirmed your playlist changes yet. Try refreshing again.",
                             )
                             .into_owned(),
                         );
@@ -5643,28 +5484,18 @@ impl App {
                     }
                 }
             }
-            ApiResponse::PlaylistFollowChanged {
-                id,
-                followed,
-                result,
-            } => match result {
+            ApiResponse::PlaylistDeleted { id, result } => match result {
                 Ok(()) => {
-                    self.saved
-                        .insert(format!("spotify:playlist:{id}"), followed);
-                    self.toast(if followed {
-                        gettext(self.locale, "Added to Your Library")
-                    } else {
-                        gettext(self.locale, "Removed from Your Library")
-                    });
+                    self.toast(gettext(self.locale, "Playlist deleted"));
                     self.load_playlists();
-                    if !followed && matches!(self.page(), Page::Playlist(current) if *current == id)
-                    {
+                    if matches!(self.page(), Page::Playlist(current) if *current == id) {
                         self.open(Page::Home);
                     }
                 }
                 Err(error) => {
-                    self.saved
-                        .insert(format!("spotify:playlist:{id}"), !followed);
+                    // The row was taken out when Delete was pressed; the
+                    // server kept the playlist, so it comes back.
+                    self.load_playlists();
                     self.toast_error(
                         // Translators: {error} is an error message.
                         gettext(self.locale, "Couldn't update the playlist: {error}")
@@ -5718,10 +5549,8 @@ impl App {
                 if self.library.albums.next_offset != Some(offset) => {}
             ApiResponse::SavedAlbums { offset, result } => match result {
                 Ok(page) => {
-                    self.request_album_types(page.items.iter().map(|item| &item.album));
-                    for item in &page.items {
-                        self.saved.insert(item.album.uri.clone(), true);
-                    }
+                    // The shelf lists the whole library. Whether an album
+                    // is a favourite is asked when its page opens.
                     self.library.albums.absorb(offset, page);
                 }
                 Err(error) => self.library.albums.fail(error.to_string()),
@@ -5741,9 +5570,6 @@ impl App {
                             list.items.clear();
                         }
                         let received = page.items.len();
-                        for artist in &page.items {
-                            self.saved.insert(artist.uri.clone(), true);
-                        }
                         list.items.extend(page.items);
                         let next = page.cursors.and_then(|cursors| cursors.after);
                         list.complete = next.is_none() || received == 0;
@@ -5759,15 +5585,6 @@ impl App {
                 Ok(page) => {
                     for item in &page.items {
                         self.saved.insert(item.show.uri.clone(), true);
-                    }
-                    let unknown: Vec<String> = page
-                        .items
-                        .iter()
-                        .map(|item| item.show.uri.clone())
-                        .filter(|uri| self.audiobooks_requested.insert(uri.clone()))
-                        .collect();
-                    if !unknown.is_empty() {
-                        self.backend.send(Command::AudiobookShows(unknown));
                     }
                     self.library.shows.absorb(offset, page);
                     if offset == 0 && self.home.requested {
@@ -5843,10 +5660,8 @@ impl App {
                             (Some("track"), false) => {
                                 gettext(self.locale, "Removed from Liked Songs")
                             }
-                            (Some("artist"), true) => gettext(self.locale, "Following artist"),
-                            (Some("artist"), false) => gettext(self.locale, "Unfollowed artist"),
-                            (_, true) => gettext(self.locale, "Saved to Your Library"),
-                            (_, false) => gettext(self.locale, "Removed from Your Library"),
+                            (_, true) => gettext(self.locale, "Added to favorites"),
+                            (_, false) => gettext(self.locale, "Removed from favorites"),
                         };
                         if !current_uris.is_empty() {
                             self.toast(message);
@@ -5894,25 +5709,6 @@ impl App {
                 if serial == self.search.serial && query == self.search.committed {
                     self.search.catalogue_pending = true;
                     self.search.playlists_pending = split;
-                }
-            }
-            ApiResponse::SearchPlaylists {
-                query,
-                serial,
-                result,
-            } => {
-                if serial != self.search.serial || query != self.search.committed {
-                    return;
-                }
-                self.search.playlists_pending = false;
-                match result {
-                    Ok(page) => {
-                        self.search.playlists = Some((serial, page));
-                        self.show_search_playlists();
-                        self.settings.remember_search(&query);
-                        self.settings_dirty = true;
-                    }
-                    Err(error) => self.search_failed(&gettext(self.locale, "Playlists"), error),
                 }
             }
             ApiResponse::Search {
@@ -5974,9 +5770,6 @@ impl App {
                 offset,
                 result,
             } => {
-                if let Ok(albums) = &result {
-                    self.request_album_types(albums.items.iter());
-                }
                 if let Some(page) = self.artist_pages.get_mut(&id) {
                     let list = page.albums.entry(groups).or_default();
                     match result {
@@ -5992,9 +5785,6 @@ impl App {
             }
             ApiResponse::Album { id, result } => {
                 let mut uris = Vec::new();
-                if let Ok(album) = &result {
-                    self.request_album_types(std::iter::once(album));
-                }
                 if let Ok(album) = &result
                     && let Some(image) = pick_image(&album.images, 64)
                 {
@@ -6098,16 +5888,16 @@ impl App {
                             self.sync_liked_songs();
                         }
                         self.resolve_pasted_song(
-                            &format!("spotify:track:{id}"),
+                            &format!("jellyfin:track:{id}"),
                             Some(PlayableItem::Track(track.clone())),
                         );
                         self.track_cache.insert(id.clone(), track);
                         self.track_used.insert(id, Instant::now());
                     }
                     Err(error) => {
-                        self.resolve_pasted_song(&format!("spotify:track:{id}"), None);
+                        self.resolve_pasted_song(&format!("jellyfin:track:{id}"), None);
                         if self.pending_link.as_deref()
-                            == Some(format!("spotify:track:{id}").as_str())
+                            == Some(format!("jellyfin:track:{id}").as_str())
                         {
                             self.pending_link = None;
                             self.toast_error(
@@ -6126,7 +5916,7 @@ impl App {
                     Some(show) => self.open(Page::Show(show.id)),
                     None => self.toast_error(gettext(
                         self.locale,
-                        "This episode's podcast is not on Spotify",
+                        "This episode's podcast is not on the server",
                     )),
                 },
                 Err(error) => self.toast_error(
@@ -6302,7 +6092,7 @@ impl App {
                         Some(album) => self.open(Page::Album(album)),
                         None => self.toast_error(gettext(
                             self.locale,
-                            "This song's album is not on Spotify",
+                            "This song's album is not in the library",
                         )),
                     }
                 } else if self.track_requests.insert(id.clone()) {
@@ -6319,7 +6109,7 @@ impl App {
                 self.pending_link = None;
                 self.toast_error(gettext(
                     self.locale,
-                    "Spotifast cannot open this kind of Spotify link",
+                    "Jellifast cannot open this kind of link",
                 ));
             }
         }
@@ -6600,7 +6390,7 @@ impl App {
 
     /// Loaded track URIs for a context, in display order.
     fn context_track_uris(&self, context_uri: &str) -> Option<Vec<String>> {
-        let uris: Vec<String> = if let Some(id) = context_uri.strip_prefix("spotify:playlist:") {
+        let uris: Vec<String> = if let Some(id) = context_uri.strip_prefix("jellyfin:playlist:") {
             self.playlist_pages
                 .get(id)?
                 .items
@@ -6609,7 +6399,7 @@ impl App {
                 .filter_map(|item| item.playable())
                 .map(|item| item.uri().to_string())
                 .collect()
-        } else if let Some(id) = context_uri.strip_prefix("spotify:album:") {
+        } else if let Some(id) = context_uri.strip_prefix("jellyfin:album:") {
             self.album_pages
                 .get(id)?
                 .tracks
@@ -6741,7 +6531,7 @@ impl App {
         {
             if shuffle {
                 (request.offset_uri, request.offset_position) = self.shuffle_start(context);
-            } else if let Some(id) = context.strip_prefix("spotify:playlist:") {
+            } else if let Some(id) = context.strip_prefix("jellyfin:playlist:") {
                 (request.offset_uri, request.offset_position) = self.playlist_start(id);
             }
         }
@@ -6826,24 +6616,16 @@ impl App {
                 self.optimistic_playing = Some((true, Instant::now()));
             }
             Target::Remote(None) => {
-                // No remote device is active, and this computer's player is
-                // not ready. Never ask Spotify to play "nowhere": either
-                // wait for the connecting engine or ask for a device.
-                if matches!(
-                    self.local_playback,
-                    LocalPlayback::Connecting | LocalPlayback::Authorizing
-                ) || (self.settings.playback_authorized
-                    && matches!(self.auth, AuthStatus::Starting | AuthStatus::Connecting))
-                {
+                // No other player is active, and this computer's player is
+                // not up yet. Never ask the server to play "nowhere": either
+                // wait for the sign-in to finish or ask for a device.
+                if matches!(self.auth, AuthStatus::Starting | AuthStatus::Connecting) {
                     self.queued_play = Some(request);
                 } else {
                     self.queue_start_pending = None;
                     self.clear_play_pending();
                     self.queued_play = None;
-                    self.toast(gettext(
-                        self.locale,
-                        "Choose a device, or enable playback on this computer",
-                    ));
+                    self.toast(gettext(self.locale, "Choose a device to play on"));
                     self.show_devices = true;
                     self.refresh_devices();
                 }
@@ -7282,7 +7064,7 @@ impl App {
 
     /// `settle` is false while the slider is still moving: the level is heard
     /// at once, and Spotify is told where it ended up on release.
-    /// Whether the playing device takes volume changes from Spotifast.
+    /// Whether the playing device takes volume changes from Jellifast.
     /// Spotify refuses them for some remote devices, so the controls are
     /// disabled for those rather than failing when used.
     pub fn can_set_volume(&self) -> bool {
@@ -7644,7 +7426,7 @@ impl App {
     fn resync_local_queue(&mut self) {
         self.backend.player(PlayerCommand::ClearQueue);
         for uri in self.manual_queue.clone() {
-            if uri.starts_with("spotify:track:") || uri.starts_with("spotify:episode:") {
+            if uri.starts_with("jellyfin:track:") || uri.starts_with("jellyfin:episode:") {
                 self.backend.player(PlayerCommand::AddToQueue(uri));
             }
         }
@@ -7671,7 +7453,7 @@ impl App {
         }
         // Queue tracks and episodes directly on the active local engine.
         // Other targets and item types use the Web API.
-        let track_like = uri.starts_with("spotify:track:") || uri.starts_with("spotify:episode:");
+        let track_like = uri.starts_with("jellyfin:track:") || uri.starts_with("jellyfin:episode:");
         if track_like && self.local.is_active() && matches!(self.target(), Target::Local) {
             self.backend.player(PlayerCommand::AddToQueue(uri));
             self.queue_recheck_at = Some(Instant::now() + QUEUE_RECHECK);
@@ -8075,10 +7857,7 @@ impl App {
             .filter(|uri| matches!(util::uri_kind(uri), Some("track" | "episode")))
             .collect();
         if uris.is_empty() {
-            self.toast(gettext(
-                self.locale,
-                "The clipboard has no Spotify song links",
-            ));
+            self.toast(gettext(self.locale, "The clipboard has no song links"));
             return;
         }
         let mut paste = PendingPaste {
@@ -8094,7 +7873,7 @@ impl App {
             }
             if let Some(item) = self.known_song(&uri) {
                 paste.found.insert(uri, item);
-            } else if let Some(id) = uri.strip_prefix("spotify:track:").map(str::to_string) {
+            } else if let Some(id) = uri.strip_prefix("jellyfin:track:").map(str::to_string) {
                 if self.track_requests.insert(id.clone()) {
                     self.backend.api(ApiRequest::Track { id });
                 }
@@ -8112,7 +7891,7 @@ impl App {
         if let Some(item) = self.copied_songs.iter().find(|item| item.uri() == uri) {
             return Some(item.clone());
         }
-        let id = uri.strip_prefix("spotify:track:")?;
+        let id = uri.strip_prefix("jellyfin:track:")?;
         self.read_cached_track(id).map(PlayableItem::Track)
     }
 
@@ -8172,13 +7951,6 @@ impl App {
     }
 
     fn set_saved(&mut self, uri: String, saved: bool) {
-        if uri.starts_with("spotify:playlist:") {
-            self.saved.insert(uri.clone(), saved);
-            let id = util::uri_id(&uri).unwrap_or_default().to_string();
-            self.backend
-                .api(ApiRequest::FollowPlaylist { id, follow: saved });
-            return;
-        }
         self.set_saved_state(uri.clone(), saved);
         self.saved_writes.insert(uri.clone(), saved);
         if self.change_liked_song(&uri, saved) {
@@ -8712,10 +8484,6 @@ impl App {
                 self.dialog = Some(dialog);
             }
             Action::CloseDialog => {
-                if matches!(self.dialog, Some(Dialog::PersonalAppIntro)) {
-                    self.settings.personal_app_intro_seen = true;
-                    self.settings_dirty = true;
-                }
                 self.dialog = None;
             }
             Action::CreatePlaylist {
@@ -8743,12 +8511,6 @@ impl App {
             } => {
                 self.dialog = None;
                 let changes = self.changed_playlist_details(&id, name, description, public);
-                if changes.kept_description {
-                    self.toast_error(gettext(
-                        self.locale,
-                        "Spotify doesn't let apps remove a playlist description, so it was kept",
-                    ));
-                }
                 if changes.name.is_some()
                     || changes.description.is_some()
                     || changes.public.is_some()
@@ -8764,31 +8526,23 @@ impl App {
             }
             Action::DeletePlaylist(id) => {
                 self.dialog = None;
-                self.saved.insert(format!("spotify:playlist:{id}"), false);
+                self.saved.remove(&format!("jellyfin:playlist:{id}"));
                 if let Some(playlists) = self.library.playlists.get_mut() {
                     playlists.retain(|playlist| playlist.id != id);
                 }
-                self.backend
-                    .api(ApiRequest::FollowPlaylist { id, follow: false });
+                self.backend.api(ApiRequest::DeletePlaylist { id });
             }
             Action::Transfer(device_id) => self.transfer(device_id),
-            Action::ActivateReceiver(receiver) => {
-                if self.activating_receiver.is_none() {
-                    self.activating_receiver = Some(receiver.name.clone());
-                    self.backend.send(Command::ActivateReceiver(receiver));
-                }
-            }
             Action::RefreshDevices => {
                 self.devices_fetched_at = None;
                 self.refresh_devices();
-                self.backend.send(Command::DiscoverReceivers);
             }
             Action::ClearQueue => self.clear_queue(),
             Action::SaveQueueAsPlaylist => self.save_queue_as_playlist(),
             Action::SaveRadio(seed) => self.save_radio(&seed),
             Action::RefreshQueue => self.refresh_queue(true),
             Action::CopyLink(uri) => {
-                if let Some(url) = util::open_spotify_url(&uri) {
+                if let Some(url) = util::web_url(&self.settings.server, &uri) {
                     ctx.copy_text(url);
                     self.toast(gettext(self.locale, "Link copied"));
                 }
@@ -8796,7 +8550,10 @@ impl App {
             Action::CopySongs(items) => {
                 let links: Vec<String> = items
                     .iter()
-                    .filter_map(|item| util::open_spotify_url(item.uri()))
+                    // The app's own names for songs: pasting them into a
+                    // playlist here reads them back.
+                    .filter(|item| item.is_track())
+                    .map(|item| item.uri().to_string())
                     .collect();
                 if !links.is_empty() {
                     // One link a line, in the platform's own line breaks.
@@ -8817,8 +8574,8 @@ impl App {
                 }
             }
             Action::PasteSongs { playlist_id, text } => self.paste_songs(playlist_id, &text),
-            Action::OpenInSpotify(uri) => {
-                if let Some(url) = util::open_spotify_url(&uri) {
+            Action::OpenInJellyfin(uri) => {
+                if let Some(url) = util::web_url(&self.settings.server, &uri) {
                     ctx.open_url(egui::OpenUrl::new_tab(url));
                 }
             }
@@ -8883,29 +8640,7 @@ impl App {
             Action::ProxyEdited => self.proxy_form_edited = true,
             Action::CancelSignIn => {
                 self.backend.send(Command::CancelSignIn);
-                self.sign_in_url = None;
                 self.auth = AuthStatus::SignedOut;
-            }
-            Action::ConfigurePersonalWebApp => {
-                self.save_settings();
-                self.backend.send(Command::ConfigurePersonalWebApp(
-                    self.settings.web_client_id.clone(),
-                ));
-            }
-            Action::OpenPersonalAppSetup => {
-                self.settings.personal_app_intro_seen = true;
-                self.settings_dirty = true;
-                self.dialog = None;
-                self.open(Page::Settings);
-                // A saved search could be hiding the Client ID field the
-                // flow is about to focus, so drop it before landing.
-                crate::ui::settings::clear_search(ctx);
-                ctx.data_mut(|data| {
-                    data.insert_temp(
-                        egui::Id::new(crate::ui::settings::PERSONAL_APP_FOCUS_ID),
-                        true,
-                    );
-                });
             }
             Action::SignOut => {
                 self.backend.send(Command::SignOut);
@@ -8978,9 +8713,6 @@ impl App {
                 self.show_devices = !self.show_devices;
                 if self.show_devices {
                     self.refresh_devices();
-                    // Receivers waiting on the network are invisible to the
-                    // Web API, so look for them ourselves.
-                    self.backend.send(Command::DiscoverReceivers);
                 }
             }
             Action::CheckForUpdates => self.check_for_updates(true),
@@ -9058,11 +8790,11 @@ impl App {
                     if crate::ui::sidebar::selected_sort(
                         self,
                         crate::settings::LibraryShelf::Playlists,
-                    ) == crate::settings::LibrarySort::Spotify
+                    ) == crate::settings::LibrarySort::Server
                     {
                         self.toast(gettext(
                             self.locale,
-                            "Spotify doesn't let apps reorder your playlists, so this order is saved on this computer",
+                            "Jellyfin keeps playlists in one list, so this order is saved on this computer",
                         ));
                     }
                     self.settings.sidebar_order = order;
@@ -9146,29 +8878,6 @@ impl App {
                 {
                     self.hide_intent = true;
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                }
-            }
-            Action::EnablePlayback => {
-                let free = self
-                    .user
-                    .as_ref()
-                    .and_then(|user| user.product.as_deref())
-                    .is_some_and(|product| product != "premium");
-                if free {
-                    self.toast_error(gettext(self.locale, "Local playback needs Spotify Premium"));
-                } else if !self.local_ready
-                    && !matches!(
-                        self.local_playback,
-                        LocalPlayback::Authorizing | LocalPlayback::Connecting
-                    )
-                {
-                    self.settings.playback_authorized = true;
-                    self.settings_dirty = true;
-                    self.backend.send(Command::AuthorizePlayback);
-                    self.toast(gettext(
-                        self.locale,
-                        "Opening your browser to set up local playback",
-                    ));
                 }
             }
             Action::OpenUrl(url) => {
@@ -9454,13 +9163,12 @@ impl App {
             .and_then(|playlist| playlist.description.as_deref())
             .map(util::strip_html)
             .unwrap_or_default();
-        let cleared = description.is_empty();
         PlaylistDetailChanges {
             name: original
                 .is_none_or(|playlist| playlist.name != name)
                 .then_some(name),
-            kept_description: cleared && !original_description.is_empty(),
-            description: (!cleared && description != original_description).then_some(description),
+            // An emptied description is a change like any other.
+            description: (description != original_description).then_some(description),
             public: public
                 .filter(|public| original.is_none_or(|playlist| playlist.public != Some(*public))),
         }
@@ -9505,27 +9213,6 @@ impl App {
             manual,
             source: self.update_source.clone(),
         });
-    }
-
-    fn maybe_suggest_personal_app(&mut self) {
-        if self.settings.personal_app_intro_seen
-            || self
-                .settings
-                .web_client_id
-                .as_deref()
-                .is_some_and(|id| !id.trim().is_empty())
-            || self.web_app.is_some()
-            || !self.is_connected()
-            || self.offline
-            || self.user.as_ref().and_then(|user| user.product.as_deref()) != Some("premium")
-            || self.dialog.is_some()
-            || self.show_devices
-            || self.settings.winamp_window
-            || self.page() == &Page::Settings
-        {
-            return;
-        }
-        self.dialog = Some(Dialog::PersonalAppIntro);
     }
 
     /// Selected row indices for `page`.
@@ -9630,7 +9317,7 @@ impl App {
     /// a row index and stay in the playlist view.
     pub fn editable_context_playlist(&self) -> Option<RowContext> {
         let uri = self.playing_context_uri()?;
-        if !uri.starts_with("spotify:playlist:") {
+        if !uri.starts_with("jellyfin:playlist:") {
             return None;
         }
         let id = util::uri_id(&uri)?.to_string();
@@ -9812,9 +9499,9 @@ impl App {
     /// Keeps the current track in the window and taskbar title (#94).
     fn sync_window_title(&mut self, ctx: &egui::Context) {
         let title = match self.now_playing().filter(|now| now.playing) {
-            Some(now) if now.subtitle.is_empty() => format!("{} - Spotifast", now.title),
+            Some(now) if now.subtitle.is_empty() => format!("{} - Jellifast", now.title),
             Some(now) => format!("{} - {}", now.subtitle, now.title),
-            None => "Spotifast".to_string(),
+            None => "Jellifast".to_string(),
         };
         if title != self.window_title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
@@ -10079,7 +9766,7 @@ impl App {
     }
 
     fn change_liked_song(&mut self, uri: &str, saved: bool) -> bool {
-        let Some(id) = uri.strip_prefix("spotify:track:") else {
+        let Some(id) = uri.strip_prefix("jellyfin:track:") else {
             return false;
         };
         self.liked_songs.seed(&self.library.liked);
@@ -10299,28 +9986,11 @@ fn friendly_page_error(locale: Locale, error: &crate::api::ApiError) -> String {
     match error.status() {
         Some(403) | Some(404) => gettext(
             locale,
-            "Spotify doesn't make this playlist's songs available to third-party apps.",
+            "The server doesn't make this playlist's songs available.",
         )
         .into_owned(),
         _ => error.to_string(),
     }
-}
-
-/// Whether a Spotify-owned playlist named `name` is the personal one the
-/// Made for you shelf looks for under `term`. The name has to be the term
-/// itself, or "Daily Mix" with a number: Spotify also makes "<Artist> Mix",
-/// "This Is <Artist>", and "<Artist> Radio" for every artist, and an artist
-/// called "Discover Weekly" put those on the shelf (#89).
-fn is_made_for_you(name: &str, term: &str) -> bool {
-    let name = name.trim().to_lowercase();
-    let term = term.to_lowercase();
-    if name == term {
-        return true;
-    }
-    term == "daily mix"
-        && name
-            .strip_prefix("daily mix ")
-            .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()))
 }
 
 /// What the engine is told to play. A single song goes as a context of
@@ -10429,17 +10099,19 @@ fn cover_error(locale: Locale, error: &crate::api::client::ApiError) -> String {
     match error.status() {
         Some(401) => gettext(
             locale,
-            "Spotify sign-in expired. Sign in again, then retry the cover upload.",
+            "Your sign-in expired. Sign in again, then retry the cover upload.",
         )
         .into_owned(),
         Some(403) => gettext(
             locale,
-            "Spotify refused this cover. Check that you own the playlist, then sign in again to grant image upload permission. If using a personal app, reconnect it in Settings too.",
+            "The server refused this cover. Check that your account may edit this playlist.",
         )
         .into_owned(),
-        Some(413) => {
-            gettext(locale, "Spotify rejected the image size. Choose a smaller image.").into_owned()
-        }
+        Some(413) => gettext(
+            locale,
+            "The server rejected the image size. Choose a smaller image.",
+        )
+        .into_owned(),
         // Translators: {error} is an error message.
         _ => gettext(locale, "Couldn't upload the cover: {error}. Try again.")
             .replace("{error}", &error.to_string()),
@@ -10873,14 +10545,14 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = headless_app();
         app.assumed_context = Some(AssumedContext {
-            uri: "spotify:playlist:sidebar".into(),
+            uri: "jellyfin:playlist:sidebar".into(),
             shuffle: None,
             at: Instant::now(),
         });
         app.remote = Some(RemoteSnapshot {
             state: PlaybackState {
                 context: Some(crate::api::models::Context {
-                    uri: "spotify:playlist:sidebar".into(),
+                    uri: "jellyfin:playlist:sidebar".into(),
                     ..Default::default()
                 }),
                 is_playing: true,
@@ -10891,7 +10563,7 @@ mod tests {
 
         app.apply(
             Action::PlayUris {
-                uris: vec!["spotify:track:standalone".into()],
+                uris: vec!["jellyfin:track:standalone".into()],
                 index: 0,
             },
             &ctx,
@@ -10911,7 +10583,7 @@ mod tests {
         app.remote = Some(RemoteSnapshot {
             state: PlaybackState {
                 context: Some(crate::api::models::Context {
-                    uri: "spotify:playlist:phone".into(),
+                    uri: "jellyfin:playlist:phone".into(),
                     ..Default::default()
                 }),
                 is_playing: true,
@@ -10920,7 +10592,7 @@ mod tests {
             received_at: Instant::now() - Duration::from_secs(30),
         });
         app.assumed_context = Some(AssumedContext {
-            uri: "spotify:playlist:here".into(),
+            uri: "jellyfin:playlist:here".into(),
             shuffle: None,
             at: Instant::now() - ASSUMED_CONTEXT_HOLD - Duration::from_secs(1),
         });
@@ -10929,7 +10601,7 @@ mod tests {
         // #then the hold is over, yet the stale poll does not win
         assert_eq!(
             app.playing_context_uri().as_deref(),
-            Some("spotify:playlist:here")
+            Some("jellyfin:playlist:here")
         );
 
         // #when a poll taken after the click still reports the phone's playlist
@@ -10938,7 +10610,7 @@ mod tests {
         // #then Spotify's word from after the click stands
         assert_eq!(
             app.playing_context_uri().as_deref(),
-            Some("spotify:playlist:phone")
+            Some("jellyfin:playlist:phone")
         );
     }
 
@@ -10992,18 +10664,18 @@ mod tests {
         app.handle_api(items(
             "pl1",
             vec![
-                row("spotify:track:gone", Some(false)),
-                row("spotify:track:fine", Some(true)),
-                row("spotify:track:gone", Some(false)),
+                row("jellyfin:track:gone", Some(false)),
+                row("jellyfin:track:fine", Some(true)),
+                row("jellyfin:track:gone", Some(false)),
             ],
         ));
         app.handle_api(items(
             "pl1",
             vec![
-                row("spotify:track:gone", None),
-                row("spotify:track:fine", None),
-                row("spotify:track:new", None),
-                row("spotify:track:gone", None),
+                row("jellyfin:track:gone", None),
+                row("jellyfin:track:fine", None),
+                row("jellyfin:track:new", None),
+                row("jellyfin:track:gone", None),
             ],
         ));
         assert_eq!(rows(&app, "pl1"), [Some(false), None, None, Some(false)]);
@@ -11025,8 +10697,8 @@ mod tests {
         app.handle_api(items(
             "pl2",
             vec![
-                row("spotify:track:other", None),
-                row("spotify:track:fine", None),
+                row("jellyfin:track:other", None),
+                row("jellyfin:track:fine", None),
             ],
         ));
         app.receive_playlist_cache(
@@ -11035,7 +10707,7 @@ mod tests {
             0,
             Some(PlaylistCache {
                 snapshot: "then".into(),
-                items: vec![row("spotify:track:other", Some(false))],
+                items: vec![row("jellyfin:track:other", Some(false))],
                 total: 1,
                 next_offset: None,
                 appendable: false,
@@ -11052,15 +10724,15 @@ mod tests {
         );
 
         // A song the Web API later calls playable is no longer greyed out.
-        app.handle_api(items("pl2", vec![row("spotify:track:other", Some(true))]));
-        app.handle_api(items("pl2", vec![row("spotify:track:other", None)]));
+        app.handle_api(items("pl2", vec![row("jellyfin:track:other", Some(true))]));
+        app.handle_api(items("pl2", vec![row("jellyfin:track:other", None)]));
         assert_eq!(rows(&app, "pl2"), [None]);
     }
 
     fn availability_row(playable: Option<bool>) -> PlaylistItem {
         PlaylistItem {
             item: Some(PlayableItem::Track(Track {
-                uri: "spotify:track:availability".into(),
+                uri: "jellyfin:track:availability".into(),
                 is_playable: playable,
                 ..Default::default()
             })),
@@ -11239,14 +10911,14 @@ mod tests {
         let ctx = egui::Context::default();
         app.settings
             .library_sort
-            .insert(LibraryShelf::Playlists, LibrarySort::Spotify);
+            .insert(LibraryShelf::Playlists, LibrarySort::Server);
         let arrange = |app: &mut App| {
             app.apply(
                 Action::ArrangeLibrary {
                     pinned: Vec::new(),
                     playlist_order: Some(vec![
-                        "spotify:playlist:b".into(),
-                        "spotify:playlist:a".into(),
+                        "jellyfin:playlist:b".into(),
+                        "jellyfin:playlist:a".into(),
                     ]),
                 },
                 &ctx,
@@ -11259,7 +10931,7 @@ mod tests {
             Some(&LibrarySort::Local)
         );
         assert_eq!(app.toasts.len(), toasts + 1);
-        assert!(app.toasts.last().unwrap().message.contains("Spotify"));
+        assert!(app.toasts.last().unwrap().message.contains("Jellyfin"));
 
         arrange(&mut app);
         assert_eq!(
@@ -11342,14 +11014,14 @@ mod tests {
         );
 
         app.playlist_busy = false;
-        let toasts = app.toasts.len();
-        assert_eq!(save(&mut app, "Mix", "", Some(true)), None);
-        assert!(!app.playlist_busy, "nothing was sent, so nothing waits");
-        assert_eq!(app.toasts.len(), toasts + 1);
+        assert_eq!(
+            save(&mut app, "Mix", "", Some(true)),
+            Some((None, Some(String::new()), None)),
+            "an emptied description is sent like any other change"
+        );
         assert_eq!(
             save(&mut app, "Renamed", "", Some(true)),
-            Some((Some("Renamed".into()), None, None)),
-            "clearing the description does not fail the rename"
+            Some((Some("Renamed".into()), Some(String::new()), None)),
         );
     }
 
@@ -11459,7 +11131,7 @@ mod tests {
                 .iter()
                 .map(|id| Playlist {
                     id: (*id).into(),
-                    uri: format!("spotify:playlist:{id}"),
+                    uri: format!("jellyfin:playlist:{id}"),
                     ..Playlist::default()
                 })
                 .collect(),
@@ -11481,124 +11153,6 @@ mod tests {
 
     fn playlist_ids(ids: &[&str]) -> Option<Vec<String>> {
         Some(ids.iter().map(|id| (*id).to_string()).collect())
-    }
-
-    /// Following, unfollowing or editing a playlist reads the library's
-    /// playlists again from the top. A later page asked for before that
-    /// belongs to the old list: taking it made that page the whole list,
-    /// and the pages it led on to ran beside the new ones and repeated them.
-    #[test]
-    fn a_playlist_page_asked_for_before_a_reload_is_not_taken() {
-        let mut app = headless_app();
-        app.backend.set_offline(true);
-
-        app.load_playlists();
-        let old = app.library.playlists_generation;
-        app.handle_api(ApiResponse::MyPlaylists {
-            offset: 0,
-            generation: old,
-            result: Ok(playlist_page(&["a", "b"], 0, 3)),
-        });
-        // The second page is on its way when following a playlist reloads.
-        app.handle_api(ApiResponse::PlaylistFollowChanged {
-            id: "new".into(),
-            followed: true,
-            result: Ok(()),
-        });
-        assert!(app.library.playlists.is_loading());
-        let new = app.library.playlists_generation;
-        assert_ne!(new, old, "a reload is a new load");
-        app.handle_api(ApiResponse::MyPlaylists {
-            offset: 2,
-            generation: old,
-            result: Ok(playlist_page(&["c"], 2, 3)),
-        });
-        assert!(
-            app.library.playlists.is_loading(),
-            "the late page is not the reloaded list"
-        );
-        assert_eq!(app.library.playlists_next, None, "and asks for nothing");
-
-        app.handle_api(ApiResponse::MyPlaylists {
-            offset: 0,
-            generation: new,
-            result: Ok(playlist_page(&["new", "a"], 0, 4)),
-        });
-        app.handle_api(ApiResponse::MyPlaylists {
-            offset: 2,
-            generation: new,
-            result: Ok(playlist_page(&["b", "c"], 2, 4)),
-        });
-        let whole = playlist_ids(&["new", "a", "b", "c"]);
-        assert_eq!(listed_playlists(&app), whole);
-        // Another answer for a page already taken adds nothing.
-        app.handle_api(ApiResponse::MyPlaylists {
-            offset: 2,
-            generation: new,
-            result: Ok(playlist_page(&["b", "c"], 2, 4)),
-        });
-        assert_eq!(listed_playlists(&app), whole);
-    }
-
-    /// An offset does not say which load a page belongs to. Once the
-    /// reloaded list has asked for its own second page, the old load's
-    /// second page, arriving late at the same offset, is still not taken:
-    /// taking it ended the list early and dropped the real second page.
-    #[test]
-    fn an_old_playlist_page_at_the_offset_the_reload_asked_for_is_not_taken() {
-        let mut app = headless_app();
-        app.backend.set_offline(true);
-
-        app.load_playlists();
-        let old = app.library.playlists_generation;
-        app.handle_api(ApiResponse::MyPlaylists {
-            offset: 0,
-            generation: old,
-            result: Ok(playlist_page(&["a", "b"], 0, 3)),
-        });
-        assert_eq!(app.library.playlists_asked, Some(2));
-        app.handle_api(ApiResponse::PlaylistFollowChanged {
-            id: "new".into(),
-            followed: true,
-            result: Ok(()),
-        });
-        let new = app.library.playlists_generation;
-        app.handle_api(ApiResponse::MyPlaylists {
-            offset: 0,
-            generation: new,
-            result: Ok(playlist_page(&["new", "a"], 0, 4)),
-        });
-        assert_eq!(
-            app.library.playlists_asked,
-            Some(2),
-            "the reloaded list asks for the same offset"
-        );
-
-        app.handle_api(ApiResponse::MyPlaylists {
-            offset: 2,
-            generation: old,
-            result: Ok(playlist_page(&["c"], 2, 3)),
-        });
-        assert_eq!(
-            listed_playlists(&app),
-            playlist_ids(&["new", "a"]),
-            "the old load's page is not taken"
-        );
-        assert_eq!(
-            app.library.playlists_asked,
-            Some(2),
-            "the reloaded list still waits for its own page"
-        );
-
-        app.handle_api(ApiResponse::MyPlaylists {
-            offset: 2,
-            generation: new,
-            result: Ok(playlist_page(&["b", "c"], 2, 4)),
-        });
-        assert_eq!(
-            listed_playlists(&app),
-            playlist_ids(&["new", "a", "b", "c"])
-        );
     }
 
     /// A later page that failed is no longer on its way, so another answer
@@ -12106,7 +11660,7 @@ mod tests {
     fn the_remembered_song_is_shown_paused_at_its_position() {
         use crate::api::models::{Album, ArtistRef, Track};
         let mut app = headless_app();
-        app.resume_track = Some("spotify:track:abc".into());
+        app.resume_track = Some("jellyfin:track:abc".into());
         app.resume_position_ms = 19_566;
         assert!(
             app.now_playing().is_none(),
@@ -12116,7 +11670,7 @@ mod tests {
             "abc".into(),
             Track {
                 id: Some("abc".into()),
-                uri: "spotify:track:abc".into(),
+                uri: "jellyfin:track:abc".into(),
                 name: "Karma Police".into(),
                 artists: vec![ArtistRef {
                     id: None,
@@ -12151,13 +11705,13 @@ mod tests {
     fn showing_the_remembered_song_keeps_its_position() {
         use crate::api::models::Track;
         let mut app = headless_app();
-        app.resume_track = Some("spotify:track:abc".into());
+        app.resume_track = Some("jellyfin:track:abc".into());
         app.resume_position_ms = 19_566;
         app.track_cache.insert(
             "abc".into(),
             Track {
                 id: Some("abc".into()),
-                uri: "spotify:track:abc".into(),
+                uri: "jellyfin:track:abc".into(),
                 duration_ms: 264_000,
                 ..Default::default()
             },
@@ -12175,7 +11729,7 @@ mod tests {
     #[test]
     fn seeking_the_remembered_song_moves_the_resume_point() {
         let mut app = headless_app();
-        app.resume_track = Some("spotify:track:abc".into());
+        app.resume_track = Some("jellyfin:track:abc".into());
         app.resume_position_ms = 19_566;
         app.seek(90_000);
         assert_eq!(app.resume_position_ms, 90_000);
@@ -12185,8 +11739,8 @@ mod tests {
     #[test]
     fn pressing_play_on_a_cold_start_does_not_restart_the_song() {
         let mut app = headless_app();
-        app.resume_context = Some("spotify:playlist:pl1".into());
-        app.resume_track = Some("spotify:track:abc".into());
+        app.resume_context = Some("jellyfin:playlist:pl1".into());
+        app.resume_track = Some("jellyfin:track:abc".into());
         app.resume_position_ms = 19_566;
         app.toggle_play();
         let request = app
@@ -12195,10 +11749,10 @@ mod tests {
             .expect("the resumed play is held for the engine");
         assert_eq!(
             request.context_uri.as_deref(),
-            Some("spotify:playlist:pl1"),
+            Some("jellyfin:playlist:pl1"),
             "it resumes inside the playlist it was left in"
         );
-        assert_eq!(request.offset_uri.as_deref(), Some("spotify:track:abc"));
+        assert_eq!(request.offset_uri.as_deref(), Some("jellyfin:track:abc"));
         assert_eq!(
             request.position_ms, 19_566,
             "the song resumes where it stopped, not at zero"
@@ -12211,7 +11765,7 @@ mod tests {
     fn playing_an_in_progress_episode_continues_from_its_resume_point() {
         let ctx = egui::Context::default();
         let mut app = headless_app();
-        let in_progress = "spotify:episode:mid";
+        let in_progress = "jellyfin:episode:mid";
         let play = |app: &mut App, uri: &str, resume_ms: Option<u32>| {
             app.queued_play = None;
             app.apply(
@@ -12227,7 +11781,7 @@ mod tests {
                 .position_ms
         };
         assert_eq!(play(&mut app, in_progress, Some(600_000)), 600_000);
-        assert_eq!(play(&mut app, "spotify:episode:new", None), 0);
+        assert_eq!(play(&mut app, "jellyfin:episode:new", None), 0);
 
         app.frame_now = Some(NowPlaying {
             local: true,
@@ -12288,8 +11842,7 @@ mod tests {
         app.local_ready = false;
         app.local_playback = LocalPlayback::Unavailable;
         app.auth = AuthStatus::Starting;
-        app.settings.playback_authorized = true;
-        app.resume_track = Some("spotify:track:abc".into());
+        app.resume_track = Some("jellyfin:track:abc".into());
 
         app.toggle_play();
 
@@ -12318,23 +11871,23 @@ mod tests {
             PlaylistPage {
                 items: PagedList {
                     items: vec![
-                        row("spotify:track:one"),
-                        row("spotify:track:two"),
-                        row("spotify:track:three"),
+                        row("jellyfin:track:one"),
+                        row("jellyfin:track:two"),
+                        row("jellyfin:track:three"),
                     ],
                     ..Default::default()
                 },
                 ..Default::default()
             },
         );
-        app.resume_context = Some("spotify:playlist:pl1".into());
-        app.resume_track = Some("spotify:track:two".into());
+        app.resume_context = Some("jellyfin:playlist:pl1".into());
+        app.resume_track = Some("jellyfin:track:two".into());
         app.resume_position_ms = 19_566;
         assert!(app.resume_only(), "loaded and current, but not playing");
 
         // Next steps to the following song, at its start, still not playing.
         app.apply(Action::Next, &ctx);
-        assert_eq!(app.resume_track.as_deref(), Some("spotify:track:three"));
+        assert_eq!(app.resume_track.as_deref(), Some("jellyfin:track:three"));
         assert_eq!(app.resume_position_ms, 0);
         assert!(
             app.queued_play.is_none() && app.local_list.is_none(),
@@ -12343,34 +11896,34 @@ mod tests {
         // Use loaded row details for immediate display.
         let now = app.now_playing().expect("the new song is shown");
         assert!(now.resuming && !now.playing);
-        assert_eq!(now.uri, "spotify:track:three");
+        assert_eq!(now.uri, "jellyfin:track:three");
 
         // Previous steps back from the start of a song.
         app.apply(Action::Previous, &ctx);
-        assert_eq!(app.resume_track.as_deref(), Some("spotify:track:two"));
+        assert_eq!(app.resume_track.as_deref(), Some("jellyfin:track:two"));
 
         // Past the threshold, Previous restarts instead, as it does while
         // playing.
         app.resume_position_ms = 19_566;
         app.apply(Action::Previous, &ctx);
-        assert_eq!(app.resume_track.as_deref(), Some("spotify:track:two"));
+        assert_eq!(app.resume_track.as_deref(), Some("jellyfin:track:two"));
         assert_eq!(app.resume_position_ms, 0, "it restarts the song");
 
         // The ends of the list wrap rather than dead-ending.
         app.apply(Action::Previous, &ctx);
-        assert_eq!(app.resume_track.as_deref(), Some("spotify:track:one"));
+        assert_eq!(app.resume_track.as_deref(), Some("jellyfin:track:one"));
         app.apply(Action::Previous, &ctx);
-        assert_eq!(app.resume_track.as_deref(), Some("spotify:track:three"));
+        assert_eq!(app.resume_track.as_deref(), Some("jellyfin:track:three"));
 
         // Play starts the selected track in its playlist.
         app.apply(Action::TogglePlay, &ctx);
         let request = app.queued_play.as_ref().expect("play starts it");
         assert_eq!(
             request.context_uri.as_deref(),
-            Some("spotify:playlist:pl1"),
+            Some("jellyfin:playlist:pl1"),
             "the playlist it was left in is kept"
         );
-        assert_eq!(request.offset_uri.as_deref(), Some("spotify:track:three"));
+        assert_eq!(request.offset_uri.as_deref(), Some("jellyfin:track:three"));
     }
 
     /// A restored session keeps shuffle enabled when skipping.
@@ -12391,20 +11944,20 @@ mod tests {
             "pl1".into(),
             PlaylistPage {
                 items: PagedList {
-                    items: vec![row("spotify:track:one"), row("spotify:track:two")],
+                    items: vec![row("jellyfin:track:one"), row("jellyfin:track:two")],
                     ..Default::default()
                 },
                 ..Default::default()
             },
         );
-        app.resume_context = Some("spotify:playlist:pl1".into());
-        app.resume_track = Some("spotify:track:one".into());
+        app.resume_context = Some("jellyfin:playlist:pl1".into());
+        app.resume_track = Some("jellyfin:track:one".into());
         app.shuffle_wanted = true;
         app.apply(Action::Next, &ctx);
         assert!(app.shuffle_wanted, "shuffle survives the skip");
         assert_eq!(
             app.resume_track.as_deref(),
-            Some("spotify:track:two"),
+            Some("jellyfin:track:two"),
             "a shuffled skip still lands on another song in the context"
         );
     }
@@ -12413,10 +11966,10 @@ mod tests {
     #[test]
     fn the_saved_queue_follows_the_resumed_song_only() {
         let mut app = headless_app();
-        app.resume_track = Some("spotify:track:abc".into());
-        app.resume_queue = vec!["spotify:track:q1".into(), "spotify:track:q2".into()];
+        app.resume_track = Some("jellyfin:track:abc".into());
+        app.resume_queue = vec!["jellyfin:track:q1".into(), "jellyfin:track:q2".into()];
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:other".into(),
+            uri: "jellyfin:track:other".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
@@ -12431,17 +11984,20 @@ mod tests {
     /// A selected list row loads without shuffle, then enables shuffle.
     #[test]
     fn a_chosen_row_in_a_list_never_loads_shuffled() {
-        let request = PlayRequest::tracks(vec!["spotify:track:a".into(), "spotify:track:b".into()])
-            .starting_at_index(1);
+        let request =
+            PlayRequest::tracks(vec!["jellyfin:track:a".into(), "jellyfin:track:b".into()])
+                .starting_at_index(1);
         let load = local_load(&request, true);
         assert_eq!(load.shuffle, None);
         assert_eq!(load.offset_index, Some(1));
         // Without a chosen row the list may shuffle from the start.
-        let request = PlayRequest::tracks(vec!["spotify:track:a".into(), "spotify:track:b".into()]);
+        let request =
+            PlayRequest::tracks(vec!["jellyfin:track:a".into(), "jellyfin:track:b".into()]);
         assert_eq!(local_load(&request, true).shuffle, Some(true));
         // A context play keeps its shuffled load; the offset was already
         // picked to match.
-        let request = PlayRequest::context("spotify:playlist:x").starting_at_uri("spotify:track:a");
+        let request =
+            PlayRequest::context("jellyfin:playlist:x").starting_at_uri("jellyfin:track:a");
         assert_eq!(local_load(&request, true).shuffle, Some(true));
     }
 
@@ -12480,18 +12036,21 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.queue = loaded_queue("spotify:track:a", &["spotify:track:b", "spotify:track:c"]);
+        app.queue = loaded_queue(
+            "jellyfin:track:a",
+            &["jellyfin:track:b", "jellyfin:track:c"],
+        );
         app.apply(Action::Next, &ctx);
         let (current, next) = queue_uris(&app);
-        assert_eq!(current.as_deref(), Some("spotify:track:b"));
-        assert_eq!(next, vec!["spotify:track:c"]);
+        assert_eq!(current.as_deref(), Some("jellyfin:track:b"));
+        assert_eq!(next, vec!["jellyfin:track:c"]);
         assert_eq!(
             app.current_track_uri().as_deref(),
-            Some("spotify:track:b"),
+            Some("jellyfin:track:b"),
             "the popped row is already the one the interface marks as playing"
         );
     }
@@ -12502,15 +12061,15 @@ mod tests {
     fn next_shows_the_next_songs_title_before_the_engine_loads_it() {
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
         app.queue = Loadable::Loaded(Queue {
-            currently_playing: Some(queued_song("spotify:track:a")),
+            currently_playing: Some(queued_song("jellyfin:track:a")),
             queue: vec![crate::api::models::PlayableItem::Track(Track {
                 id: Some("b".into()),
-                uri: "spotify:track:b".into(),
+                uri: "jellyfin:track:b".into(),
                 name: "Second Song".into(),
                 ..Default::default()
             })],
@@ -12518,7 +12077,7 @@ mod tests {
         assert!(!app.track_cache.contains_key("b"));
         app.apply(Action::Next, &egui::Context::default());
         let now = app.now_playing().expect("the next song is on show");
-        assert_eq!(now.uri, "spotify:track:b");
+        assert_eq!(now.uri, "jellyfin:track:b");
         assert_eq!(now.title, "Second Song");
     }
 
@@ -12526,21 +12085,21 @@ mod tests {
     fn a_pending_next_keeps_paused_playback_paused() {
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Paused;
         app.track_cache.insert(
             "b".into(),
             Track {
-                uri: "spotify:track:b".into(),
+                uri: "jellyfin:track:b".into(),
                 ..Default::default()
             },
         );
-        app.queue = loaded_queue("spotify:track:a", &["spotify:track:b"]);
+        app.queue = loaded_queue("jellyfin:track:a", &["jellyfin:track:b"]);
         app.apply(Action::Next, &egui::Context::default());
         let now = app.now_playing().unwrap();
-        assert_eq!(now.uri, "spotify:track:b");
+        assert_eq!(now.uri, "jellyfin:track:b");
         assert!(
             !now.playing,
             "Next preserves pause while the engine catches up"
@@ -12554,26 +12113,26 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:honey".into(),
+            uri: "jellyfin:track:honey".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
         app.queue = Loadable::Loaded(Queue {
             currently_playing: None,
-            queue: vec![queued_song("spotify:track:stale")],
+            queue: vec![queued_song("jellyfin:track:stale")],
         });
 
         app.apply(Action::Next, &ctx);
 
         assert_eq!(
             app.current_track_uri().as_deref(),
-            Some("spotify:track:honey"),
+            Some("jellyfin:track:honey"),
             "an unanchored row is not presented as Next's destination"
         );
         assert!(app.intent_track.is_none());
         assert_eq!(
             queue_uris(&app).1,
-            vec!["spotify:track:stale"],
+            vec!["jellyfin:track:stale"],
             "the restored queue stays visible until the live queue arrives"
         );
     }
@@ -12585,28 +12144,28 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:honey".into(),
+            uri: "jellyfin:track:honey".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.queue = loaded_queue("spotify:track:honey", &["spotify:track:guessed"]);
+        app.queue = loaded_queue("jellyfin:track:honey", &["jellyfin:track:guessed"]);
 
         app.apply(Action::Next, &ctx);
         assert_eq!(
             app.current_track_uri().as_deref(),
-            Some("spotify:track:guessed")
+            Some("jellyfin:track:guessed")
         );
 
         let mut reported = app.local.clone();
         reported.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:black-dove".into(),
+            uri: "jellyfin:track:black-dove".into(),
             ..Default::default()
         });
         app.handle_local(reported);
 
         assert_eq!(
             app.current_track_uri().as_deref(),
-            Some("spotify:track:black-dove"),
+            Some("jellyfin:track:black-dove"),
             "the real engine track wins without waiting for a timeout"
         );
         assert!(app.intent_track.is_none());
@@ -12620,21 +12179,21 @@ mod tests {
         app.local_ready = false;
         app.selected_device = Some("phone".into());
         app.remote_poll_seq = 7;
-        app.expect_track("spotify:track:wanted".into(), 0);
+        app.expect_track("jellyfin:track:wanted".into(), 0);
 
-        app.reconcile_remote_track_intent(7, Some("spotify:track:old"));
+        app.reconcile_remote_track_intent(7, Some("jellyfin:track:old"));
         assert!(
             app.intent_track.is_some(),
             "the in-flight poll predates the command"
         );
 
-        app.reconcile_remote_track_intent(8, Some("spotify:track:old"));
+        app.reconcile_remote_track_intent(8, Some("jellyfin:track:old"));
         assert!(
             app.intent_track.is_some(),
             "one stale Spotify answer is retried"
         );
 
-        app.reconcile_remote_track_intent(9, Some("spotify:track:actual"));
+        app.reconcile_remote_track_intent(9, Some("jellyfin:track:actual"));
         assert!(
             app.intent_track.is_none(),
             "the second fresh report settles playback"
@@ -12648,23 +12207,23 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.queue = loaded_queue("spotify:track:a", &["spotify:track:b"]);
+        app.queue = loaded_queue("jellyfin:track:a", &["jellyfin:track:b"]);
 
         app.apply(Action::Next, &ctx);
         assert_eq!(
             app.current_track_uri().as_deref(),
-            Some("spotify:track:b"),
+            Some("jellyfin:track:b"),
             "Next marks its queue head immediately"
         );
 
         app.apply(Action::Previous, &ctx);
         assert_eq!(
             app.current_track_uri().as_deref(),
-            Some("spotify:track:a"),
+            Some("jellyfin:track:a"),
             "Previous restores the engine's current row instead of holding Next's marker"
         );
     }
@@ -12673,16 +12232,19 @@ mod tests {
     #[test]
     fn a_song_starting_consumes_its_queue_row() {
         let mut app = headless_app();
-        app.queue = loaded_queue("spotify:track:a", &["spotify:track:b", "spotify:track:c"]);
+        app.queue = loaded_queue(
+            "jellyfin:track:a",
+            &["jellyfin:track:b", "jellyfin:track:c"],
+        );
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:b".into(),
+            uri: "jellyfin:track:b".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
         app.on_now_playing_changed();
         let (current, next) = queue_uris(&app);
-        assert_eq!(current.as_deref(), Some("spotify:track:b"));
-        assert_eq!(next, vec!["spotify:track:c"]);
+        assert_eq!(current.as_deref(), Some("jellyfin:track:b"));
+        assert_eq!(next, vec!["jellyfin:track:c"]);
     }
 
     /// A stale queue response does not undo an optimistic skip.
@@ -12691,18 +12253,21 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.queue = loaded_queue("spotify:track:a", &["spotify:track:b", "spotify:track:c"]);
+        app.queue = loaded_queue(
+            "jellyfin:track:a",
+            &["jellyfin:track:b", "jellyfin:track:c"],
+        );
         app.apply(Action::Next, &ctx);
 
         let stale = Queue {
-            currently_playing: Some(queued_song("spotify:track:a")),
+            currently_playing: Some(queued_song("jellyfin:track:a")),
             queue: vec![
-                queued_song("spotify:track:b"),
-                queued_song("spotify:track:c"),
+                queued_song("jellyfin:track:b"),
+                queued_song("jellyfin:track:c"),
             ],
         };
         app.handle_api(ApiResponse::Queue {
@@ -12712,10 +12277,10 @@ mod tests {
         let (current, next) = queue_uris(&app);
         assert_eq!(
             current.as_deref(),
-            Some("spotify:track:b"),
+            Some("jellyfin:track:b"),
             "the pop stands"
         );
-        assert_eq!(next, vec!["spotify:track:c"]);
+        assert_eq!(next, vec!["jellyfin:track:c"]);
         assert!(
             app.queue_recheck_at.is_some(),
             "the stale answer is asked again rather than believed"
@@ -12729,7 +12294,7 @@ mod tests {
             });
         }
         let (current, _) = queue_uris(&app);
-        assert_eq!(current.as_deref(), Some("spotify:track:a"));
+        assert_eq!(current.as_deref(), Some("jellyfin:track:a"));
     }
 
     /// A pending addition is not restored after its track starts.
@@ -12737,20 +12302,20 @@ mod tests {
     fn a_played_pending_add_is_not_put_back() {
         let mut app = headless_app();
         app.pending_queue_adds = vec![PendingQueueAdd {
-            item: queued_song("spotify:track:b"),
+            item: queued_song("jellyfin:track:b"),
             at: Instant::now(),
             manual_index: 0,
             write: None,
         }];
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:b".into(),
+            uri: "jellyfin:track:b".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.queue = loaded_queue("spotify:track:b", &["spotify:track:c"]);
+        app.queue = loaded_queue("jellyfin:track:b", &["jellyfin:track:c"]);
         app.reconcile_pending_queue();
         let (_, next) = queue_uris(&app);
-        assert_eq!(next, vec!["spotify:track:c"], "no resurrected row on top");
+        assert_eq!(next, vec!["jellyfin:track:c"], "no resurrected row on top");
         assert!(
             app.pending_queue_adds.is_empty(),
             "the add has been consumed"
@@ -12763,40 +12328,40 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.manual_queue = vec!["spotify:track:b".into(), "spotify:track:c".into()];
+        app.manual_queue = vec!["jellyfin:track:b".into(), "jellyfin:track:c".into()];
         app.queue = loaded_queue(
-            "spotify:track:a",
-            &["spotify:track:b", "spotify:track:c", "spotify:track:d"],
+            "jellyfin:track:a",
+            &["jellyfin:track:b", "jellyfin:track:c", "jellyfin:track:d"],
         );
         app.apply(
             Action::PlayFromRow {
                 context: RowContext::Queue,
-                uri: "spotify:track:c".into(),
+                uri: "jellyfin:track:c".into(),
                 index: 1,
             },
             &ctx,
         );
         let (current, next) = queue_uris(&app);
-        assert_eq!(current.as_deref(), Some("spotify:track:c"));
+        assert_eq!(current.as_deref(), Some("jellyfin:track:c"));
         assert_eq!(
             next,
-            vec!["spotify:track:d"],
+            vec!["jellyfin:track:d"],
             "the rows after the chosen one stay"
         );
         assert_eq!(
             app.current_track_uri().as_deref(),
-            Some("spotify:track:c"),
+            Some("jellyfin:track:c"),
             "the chosen row is marked as playing at once"
         );
         assert!(
             app.manual_queue.is_empty(),
             "hand-queued songs consumed by the jump are let go"
         );
-        assert!(app.play_pending("spotify:track:c"));
+        assert!(app.play_pending("jellyfin:track:c"));
     }
 
     /// The click names a song: when the rows have shifted under the
@@ -12806,21 +12371,24 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.queue = loaded_queue("spotify:track:a", &["spotify:track:b", "spotify:track:c"]);
+        app.queue = loaded_queue(
+            "jellyfin:track:a",
+            &["jellyfin:track:b", "jellyfin:track:c"],
+        );
         app.apply(
             Action::PlayFromRow {
                 context: RowContext::Queue,
-                uri: "spotify:track:c".into(),
+                uri: "jellyfin:track:c".into(),
                 index: 0,
             },
             &ctx,
         );
         let (current, next) = queue_uris(&app);
-        assert_eq!(current.as_deref(), Some("spotify:track:c"));
+        assert_eq!(current.as_deref(), Some("jellyfin:track:c"));
         assert!(
             next.is_empty(),
             "the row above the chosen song went with it"
@@ -12833,18 +12401,18 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.manual_queue = vec!["spotify:track:b".into(), "spotify:track:c".into()];
+        app.manual_queue = vec!["jellyfin:track:b".into(), "jellyfin:track:c".into()];
         app.queue = loaded_queue(
-            "spotify:track:a",
+            "jellyfin:track:a",
             &[
-                "spotify:track:b",
-                "spotify:track:c",
-                "spotify:track:c",
-                "spotify:track:d",
+                "jellyfin:track:b",
+                "jellyfin:track:c",
+                "jellyfin:track:c",
+                "jellyfin:track:d",
             ],
         );
         assert!(app.can_clear_queue());
@@ -12852,7 +12420,7 @@ mod tests {
         let (_, next) = queue_uris(&app);
         assert_eq!(
             next,
-            vec!["spotify:track:c", "spotify:track:d"],
+            vec!["jellyfin:track:c", "jellyfin:track:d"],
             "one queued c goes, the context's own c stays"
         );
         assert!(app.manual_queue.is_empty());
@@ -12870,22 +12438,22 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
         // What is playing comes to b on its own later on.
         app.queue = loaded_queue(
-            "spotify:track:a",
+            "jellyfin:track:a",
             &[
-                "spotify:track:ctx1",
-                "spotify:track:b",
-                "spotify:track:ctx2",
+                "jellyfin:track:ctx1",
+                "jellyfin:track:b",
+                "jellyfin:track:ctx2",
             ],
         );
         app.apply(
             Action::AddToQueue {
-                uri: "spotify:track:b".into(),
+                uri: "jellyfin:track:b".into(),
                 label: "b".into(),
             },
             &ctx,
@@ -12894,10 +12462,10 @@ mod tests {
         assert_eq!(
             next,
             vec![
-                "spotify:track:b",
-                "spotify:track:ctx1",
-                "spotify:track:b",
-                "spotify:track:ctx2",
+                "jellyfin:track:b",
+                "jellyfin:track:ctx1",
+                "jellyfin:track:b",
+                "jellyfin:track:ctx2",
             ],
             "one row queued on top, the context's own b still below"
         );
@@ -12907,9 +12475,9 @@ mod tests {
         assert_eq!(
             next,
             vec![
-                "spotify:track:ctx1",
-                "spotify:track:b",
-                "spotify:track:ctx2",
+                "jellyfin:track:ctx1",
+                "jellyfin:track:b",
+                "jellyfin:track:ctx2",
             ],
             "the queued b goes and the context keeps the b it was going to play"
         );
@@ -12921,24 +12489,24 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
         app.queue = loaded_queue(
-            "spotify:track:a",
-            &["spotify:track:ctx1", "spotify:track:ctx2"],
+            "jellyfin:track:a",
+            &["jellyfin:track:ctx1", "jellyfin:track:ctx2"],
         );
         app.apply(
             Action::AddToQueue {
-                uri: "spotify:track:b".into(),
+                uri: "jellyfin:track:b".into(),
                 label: "b".into(),
             },
             &ctx,
         );
         app.apply(
             Action::AddToQueue {
-                uri: "spotify:track:c".into(),
+                uri: "jellyfin:track:c".into(),
                 label: "c".into(),
             },
             &ctx,
@@ -12947,10 +12515,10 @@ mod tests {
         assert_eq!(
             next,
             vec![
-                "spotify:track:b",
-                "spotify:track:c",
-                "spotify:track:ctx1",
-                "spotify:track:ctx2",
+                "jellyfin:track:b",
+                "jellyfin:track:c",
+                "jellyfin:track:ctx1",
+                "jellyfin:track:ctx2",
             ],
             "queued songs keep their order and stay ahead of the context"
         );
@@ -12962,7 +12530,7 @@ mod tests {
 
     fn album_queue_track(id: &str) -> Track {
         Track {
-            uri: format!("spotify:track:{id}"),
+            uri: format!("jellyfin:track:{id}"),
             name: id.to_string(),
             ..Default::default()
         }
@@ -12975,11 +12543,11 @@ mod tests {
             let mut app = headless_app();
             app.local.connected = true;
             app.local.track = Some(crate::player::LocalTrack {
-                uri: "spotify:track:old".into(),
+                uri: "jellyfin:track:old".into(),
                 ..Default::default()
             });
             app.local.playback = Playback::Playing;
-            app.queue = loaded_queue("spotify:track:old", &["spotify:track:old-next"]);
+            app.queue = loaded_queue("jellyfin:track:old", &["jellyfin:track:old-next"]);
             app.on_now_playing_changed();
             app.album_pages.insert(
                 "album".into(),
@@ -12998,17 +12566,17 @@ mod tests {
             );
             app.apply(
                 Action::AddToQueue {
-                    uri: "spotify:album:album".into(),
+                    uri: "jellyfin:album:album".into(),
                     label: "Album".into(),
                 },
                 &ctx,
             );
-            app.add_to_queue("spotify:track:extra".into(), "Extra".into());
+            app.add_to_queue("jellyfin:track:extra".into(), "Extra".into());
             let manual = app.manual_queue.clone();
             assert_eq!(manual.len(), 4);
             app.apply(
                 Action::PlayContext {
-                    uri: "spotify:album:album".into(),
+                    uri: "jellyfin:album:album".into(),
                     offset_uri: None,
                     offset_index: None,
                 },
@@ -13016,7 +12584,7 @@ mod tests {
             );
             let mut started = app.local.clone();
             started.track = Some(crate::player::LocalTrack {
-                uri: "spotify:track:intro".into(),
+                uri: "jellyfin:track:intro".into(),
                 ..Default::default()
             });
             started.track_sequence += 1;
@@ -13027,14 +12595,14 @@ mod tests {
             );
 
             let next = [
-                "spotify:track:intro",
-                "spotify:track:second",
-                "spotify:track:third",
-                "spotify:track:extra",
-                "spotify:track:second",
-                "spotify:track:third",
+                "jellyfin:track:intro",
+                "jellyfin:track:second",
+                "jellyfin:track:third",
+                "jellyfin:track:extra",
+                "jellyfin:track:second",
+                "jellyfin:track:third",
             ];
-            let Loadable::Loaded(fetched) = loaded_queue("spotify:track:intro", &next) else {
+            let Loadable::Loaded(fetched) = loaded_queue("jellyfin:track:intro", &next) else {
                 unreachable!();
             };
             app.handle_api(ApiResponse::Queue {
@@ -13048,7 +12616,7 @@ mod tests {
             // Restarting the same album also keeps its separate queued copy.
             app.apply(
                 Action::PlayContext {
-                    uri: "spotify:album:album".into(),
+                    uri: "jellyfin:album:album".into(),
                     offset_uri: None,
                     offset_index: None,
                 },
@@ -13093,37 +12661,37 @@ mod tests {
                 playback: Playback::Playing,
                 repeat,
                 track: Some(crate::player::LocalTrack {
-                    uri: "spotify:track:a".into(),
+                    uri: "jellyfin:track:a".into(),
                     ..Default::default()
                 }),
                 ..Default::default()
             };
             app.on_now_playing_changed();
-            app.manual_queue = vec!["spotify:track:b".into(), "spotify:track:b".into()];
+            app.manual_queue = vec!["jellyfin:track:b".into(), "jellyfin:track:b".into()];
             app.queue = loaded_queue(
-                "spotify:track:a",
+                "jellyfin:track:a",
                 &[
-                    "spotify:track:b",
-                    "spotify:track:b",
-                    "spotify:track:context",
+                    "jellyfin:track:b",
+                    "jellyfin:track:b",
+                    "jellyfin:track:context",
                 ],
             );
             app.apply(Action::Next, &ctx);
             let mut started = app.local.clone();
             started.track = Some(crate::player::LocalTrack {
-                uri: "spotify:track:b".into(),
+                uri: "jellyfin:track:b".into(),
                 ..Default::default()
             });
             started.track_sequence += 1;
             app.handle_local(started);
-            assert_eq!(app.manual_queue, ["spotify:track:b"]);
+            assert_eq!(app.manual_queue, ["jellyfin:track:b"]);
             assert_eq!(app.queued_rows_len(), 1);
 
             let mut again = app.local.clone();
             again.track_sequence += 1;
             app.handle_local(again);
             if repeat == RepeatMode::Track {
-                assert_eq!(app.manual_queue, ["spotify:track:b"]);
+                assert_eq!(app.manual_queue, ["jellyfin:track:b"]);
                 assert_eq!(
                     app.queued_rows_len(),
                     1,
@@ -13135,7 +12703,7 @@ mod tests {
                 app.handle_local(skipped);
             }
             assert!(app.manual_queue.is_empty());
-            assert_eq!(queue_uris(&app).1, ["spotify:track:context"]);
+            assert_eq!(queue_uris(&app).1, ["jellyfin:track:context"]);
             app.backend.shutdown();
         }
     }
@@ -13152,14 +12720,14 @@ mod tests {
             app.local.playback = Playback::Playing;
             app.local.connected = local;
             app.local.track = Some(crate::player::LocalTrack {
-                uri: "spotify:track:current".into(),
+                uri: "jellyfin:track:current".into(),
                 ..Default::default()
             });
             app.queue = loaded_queue(
-                "spotify:track:current",
-                &["spotify:track:manual", "spotify:track:context"],
+                "jellyfin:track:current",
+                &["jellyfin:track:manual", "jellyfin:track:context"],
             );
-            app.manual_queue.push("spotify:track:manual".into());
+            app.manual_queue.push("jellyfin:track:manual".into());
             let mut tracks: Vec<_> = (0..120)
                 .map(|n| album_queue_track(&format!("song{n}")))
                 .collect();
@@ -13187,15 +12755,15 @@ mod tests {
                 },
             );
             let action = Action::AddToQueue {
-                uri: "spotify:album:album".into(),
+                uri: "jellyfin:album:album".into(),
                 label: "Album".into(),
             };
             app.apply(action.clone(), &egui::Context::default());
             app.apply(action, &egui::Context::default());
             let (_, queued) = queue_uris(&app);
-            assert_eq!(queued[0], "spotify:track:manual");
+            assert_eq!(queued[0], "jellyfin:track:manual");
             assert_eq!(queued[1..queued.len() - 1], expected);
-            assert_eq!(queued.last().unwrap(), "spotify:track:context");
+            assert_eq!(queued.last().unwrap(), "jellyfin:track:context");
             if local {
                 assert_eq!(app.backend.take_queued_tracks(), expected);
                 assert!(app.backend.take_queue_requests().is_empty());
@@ -13207,11 +12775,11 @@ mod tests {
                 );
             }
             assert!(app.pending_album_queues.is_empty());
-            app.add_to_queue("spotify:track:after".into(), "After".into());
+            app.add_to_queue("jellyfin:track:after".into(), "After".into());
             let (_, queued) = queue_uris(&app);
             assert_eq!(
                 queued[queued.len() - 2],
-                "spotify:track:after",
+                "jellyfin:track:after",
                 "a later song stays after an album longer than 100 tracks"
             );
             app.backend.shutdown();
@@ -13221,8 +12789,8 @@ mod tests {
     #[test]
     fn queue_album_fetches_all_pages_before_appending_and_ignores_old_pages() {
         let mut app = test_app("album-queue-pages");
-        app.queue = loaded_queue("spotify:track:current", &["spotify:track:context"]);
-        app.add_to_queue("spotify:album:album".into(), "Album".into());
+        app.queue = loaded_queue("jellyfin:track:current", &["jellyfin:track:context"]);
+        app.add_to_queue("jellyfin:album:album".into(), "Album".into());
         let request = app.album_queue_serial;
         let requests = app.backend.take_queue_requests();
         assert!(matches!(
@@ -13241,7 +12809,7 @@ mod tests {
             offset: 0,
             result: Ok(page.clone()),
         });
-        assert_eq!(queue_uris(&app).1, ["spotify:track:context"]);
+        assert_eq!(queue_uris(&app).1, ["jellyfin:track:context"]);
         let requests = app.backend.take_queue_requests();
         assert!(matches!(
             &requests[..],
@@ -13267,10 +12835,10 @@ mod tests {
         assert_eq!(
             queue_uris(&app).1,
             [
-                "spotify:track:one",
-                "spotify:track:two",
-                "spotify:track:one",
-                "spotify:track:context"
+                "jellyfin:track:one",
+                "jellyfin:track:two",
+                "jellyfin:track:one",
+                "jellyfin:track:context"
             ]
         );
         assert!(app.pending_album_queues.is_empty());
@@ -13280,7 +12848,7 @@ mod tests {
     #[test]
     fn remote_album_queue_keeps_its_rows_while_rate_limited_writes_are_pending() {
         let mut app = test_app("album-queue-stale");
-        app.queue = loaded_queue("spotify:track:current", &["spotify:track:context"]);
+        app.queue = loaded_queue("jellyfin:track:current", &["jellyfin:track:context"]);
         let old = app.queue.get().unwrap().clone();
         app.queue_album_tracks(
             vec![
@@ -13304,10 +12872,10 @@ mod tests {
             assert_eq!(
                 queue_uris(&app).1,
                 [
-                    "spotify:track:a",
-                    "spotify:track:b",
-                    "spotify:track:a",
-                    "spotify:track:context"
+                    "jellyfin:track:a",
+                    "jellyfin:track:b",
+                    "jellyfin:track:a",
+                    "jellyfin:track:context"
                 ]
             );
         }
@@ -13318,10 +12886,10 @@ mod tests {
         assert_eq!(
             queue_uris(&app).1,
             [
-                "spotify:track:a",
-                "spotify:track:b",
-                "spotify:track:a",
-                "spotify:track:context"
+                "jellyfin:track:a",
+                "jellyfin:track:b",
+                "jellyfin:track:a",
+                "jellyfin:track:context"
             ]
         );
         app.handle_api(ApiResponse::QueueBatchAdded {
@@ -13341,7 +12909,7 @@ mod tests {
     #[test]
     fn rejected_queue_copies_leave_accepted_later_and_context_copies_intact() {
         let mut app = test_app("queue-partial-failure");
-        app.queue = loaded_queue("spotify:track:current", &["spotify:track:a"]);
+        app.queue = loaded_queue("jellyfin:track:current", &["jellyfin:track:a"]);
         app.queue_album_tracks(
             vec![
                 album_queue_track("a"),
@@ -13352,7 +12920,7 @@ mod tests {
         );
         let album = app.album_queue_serial;
         // Bypass click debounce: this is a separately selected occurrence.
-        app.queue_one("spotify:track:a".into(), "Later A".into(), false);
+        app.queue_one("jellyfin:track:a".into(), "Later A".into(), false);
         let later = app.album_queue_serial;
         app.handle_api(ApiResponse::QueueBatchAdded {
             request: album,
@@ -13362,10 +12930,10 @@ mod tests {
                 message: "Rejected".into(),
             }),
         });
-        assert_eq!(app.manual_queue, ["spotify:track:a", "spotify:track:a"]);
+        assert_eq!(app.manual_queue, ["jellyfin:track:a", "jellyfin:track:a"]);
         assert_eq!(
             queue_uris(&app).1,
-            ["spotify:track:a", "spotify:track:a", "spotify:track:a"]
+            ["jellyfin:track:a", "jellyfin:track:a", "jellyfin:track:a"]
         );
         assert_eq!(app.pending_queue_adds.len(), 2);
         assert_eq!(app.pending_queue_adds[1].manual_index, 1);
@@ -13373,17 +12941,17 @@ mod tests {
         app.handle_api(ApiResponse::QueueBatchAdded {
             request: later,
             added: 0,
-            result: Err(crate::api::ApiError::QuotaExhausted),
+            result: Err(crate::api::ApiError::RateLimited),
         });
-        assert_eq!(app.manual_queue, ["spotify:track:a"]);
-        assert_eq!(queue_uris(&app).1, ["spotify:track:a", "spotify:track:a"]);
+        assert_eq!(app.manual_queue, ["jellyfin:track:a"]);
+        assert_eq!(queue_uris(&app).1, ["jellyfin:track:a", "jellyfin:track:a"]);
         app.backend.shutdown();
     }
 
     #[test]
     fn pending_single_keeps_its_name_and_duration_during_and_after_a_cooldown() {
         let mut app = test_app("queue-single-cooldown");
-        app.queue = loaded_queue("spotify:track:current", &["spotify:track:context"]);
+        app.queue = loaded_queue("jellyfin:track:current", &["jellyfin:track:context"]);
         let old = app.queue.get().unwrap().clone();
         let track = Track {
             duration_ms: 215_000,
@@ -13432,8 +13000,8 @@ mod tests {
         for cancel in ["clear", "sign-out", "device", "failure"] {
             let mut app = test_app(&format!("album-queue-cancel-{cancel}"));
             app.local_ready = true;
-            app.queue = loaded_queue("spotify:track:current", &["spotify:track:context"]);
-            app.add_to_queue("spotify:album:album".into(), "Album".into());
+            app.queue = loaded_queue("jellyfin:track:current", &["jellyfin:track:context"]);
+            app.add_to_queue("jellyfin:album:album".into(), "Album".into());
             let request = app.album_queue_serial;
             app.backend.take_queue_requests();
             match cancel {
@@ -13469,13 +13037,13 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.queue = loaded_queue("spotify:track:a", &["spotify:track:ctx1"]);
+        app.queue = loaded_queue("jellyfin:track:a", &["jellyfin:track:ctx1"]);
         let add = Action::AddToQueue {
-            uri: "spotify:track:b".into(),
+            uri: "jellyfin:track:b".into(),
             label: "b".into(),
         };
         app.apply(add.clone(), &ctx);
@@ -13483,7 +13051,7 @@ mod tests {
         let (_, next) = queue_uris(&app);
         assert_eq!(
             next,
-            vec!["spotify:track:b", "spotify:track:ctx1"],
+            vec!["jellyfin:track:b", "jellyfin:track:ctx1"],
             "the double-click's second click is not a second wish"
         );
         // Simulate a later request.
@@ -13494,7 +13062,11 @@ mod tests {
         let (_, next) = queue_uris(&app);
         assert_eq!(
             next,
-            vec!["spotify:track:b", "spotify:track:b", "spotify:track:ctx1"],
+            vec![
+                "jellyfin:track:b",
+                "jellyfin:track:b",
+                "jellyfin:track:ctx1"
+            ],
             "two asks are two rows, one after the other"
         );
     }
@@ -13507,16 +13079,16 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.queue = loaded_queue("spotify:track:a", &["spotify:track:ctx1"]);
+        app.queue = loaded_queue("jellyfin:track:a", &["jellyfin:track:ctx1"]);
         let add = Action::QueueMany {
             songs: vec![
-                ("spotify:track:b".into(), "b".into()),
-                ("spotify:track:c".into(), "c".into()),
-                ("spotify:track:b".into(), "b".into()),
+                ("jellyfin:track:b".into(), "b".into()),
+                ("jellyfin:track:c".into(), "c".into()),
+                ("jellyfin:track:b".into(), "b".into()),
             ],
         };
         app.apply(add.clone(), &ctx);
@@ -13528,16 +13100,16 @@ mod tests {
         assert_eq!(
             next,
             vec![
-                "spotify:track:b",
-                "spotify:track:c",
-                "spotify:track:b",
-                "spotify:track:ctx1",
+                "jellyfin:track:b",
+                "jellyfin:track:c",
+                "jellyfin:track:b",
+                "jellyfin:track:ctx1",
             ],
             "every picked row is queued, in order"
         );
         assert_eq!(
             app.manual_queue,
-            vec!["spotify:track:b", "spotify:track:c", "spotify:track:b"]
+            vec!["jellyfin:track:b", "jellyfin:track:c", "jellyfin:track:b"]
         );
         assert_eq!(
             app.toasts.last().map(|toast| toast.message.as_str()),
@@ -13551,13 +13123,13 @@ mod tests {
         assert_eq!(
             queue_uris(&app).1,
             [
-                "spotify:track:b",
-                "spotify:track:c",
-                "spotify:track:b",
-                "spotify:track:b",
-                "spotify:track:c",
-                "spotify:track:b",
-                "spotify:track:ctx1"
+                "jellyfin:track:b",
+                "jellyfin:track:c",
+                "jellyfin:track:b",
+                "jellyfin:track:b",
+                "jellyfin:track:c",
+                "jellyfin:track:b",
+                "jellyfin:track:ctx1"
             ]
         );
     }
@@ -13566,10 +13138,10 @@ mod tests {
     fn a_queue_batch_reports_only_rows_it_added() {
         let ctx = egui::Context::default();
         let mut app = headless_app();
-        app.queue = loaded_queue("spotify:track:a", &["spotify:track:ctx1"]);
+        app.queue = loaded_queue("jellyfin:track:a", &["jellyfin:track:ctx1"]);
         app.apply(
             Action::AddToQueue {
-                uri: "spotify:track:b".into(),
+                uri: "jellyfin:track:b".into(),
                 label: "b".into(),
             },
             &ctx,
@@ -13577,9 +13149,9 @@ mod tests {
         app.apply(
             Action::QueueMany {
                 songs: vec![
-                    ("spotify:track:b".into(), "b".into()),
-                    ("spotify:track:c".into(), "c".into()),
-                    ("spotify:track:c".into(), "c".into()),
+                    ("jellyfin:track:b".into(), "b".into()),
+                    ("jellyfin:track:c".into(), "c".into()),
+                    ("jellyfin:track:c".into(), "c".into()),
                 ],
             },
             &ctx,
@@ -13587,10 +13159,10 @@ mod tests {
         assert_eq!(
             queue_uris(&app).1,
             [
-                "spotify:track:b",
-                "spotify:track:c",
-                "spotify:track:c",
-                "spotify:track:ctx1"
+                "jellyfin:track:b",
+                "jellyfin:track:c",
+                "jellyfin:track:c",
+                "jellyfin:track:ctx1"
             ]
         );
         assert_eq!(app.toasts.last().unwrap().message, "2 songs added to queue");
@@ -13604,14 +13176,14 @@ mod tests {
     fn an_overtaken_queue_answer_is_dropped_unread() {
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.queue = loaded_queue("spotify:track:a", &["spotify:track:b"]);
+        app.queue = loaded_queue("jellyfin:track:a", &["jellyfin:track:b"]);
         app.queue_seq = 2;
         let old_story = Queue {
-            currently_playing: Some(queued_song("spotify:track:a")),
+            currently_playing: Some(queued_song("jellyfin:track:a")),
             queue: Vec::new(),
         };
         app.handle_api(ApiResponse::Queue {
@@ -13621,14 +13193,14 @@ mod tests {
         let (_, next) = queue_uris(&app);
         assert_eq!(
             next,
-            vec!["spotify:track:b"],
+            vec!["jellyfin:track:b"],
             "the overtaken answer changed nothing"
         );
         let current_story = Queue {
-            currently_playing: Some(queued_song("spotify:track:a")),
+            currently_playing: Some(queued_song("jellyfin:track:a")),
             queue: vec![
-                queued_song("spotify:track:b"),
-                queued_song("spotify:track:c"),
+                queued_song("jellyfin:track:b"),
+                queued_song("jellyfin:track:c"),
             ],
         };
         app.handle_api(ApiResponse::Queue {
@@ -13636,7 +13208,7 @@ mod tests {
             result: Ok(current_story),
         });
         let (_, next) = queue_uris(&app);
-        assert_eq!(next, vec!["spotify:track:b", "spotify:track:c"]);
+        assert_eq!(next, vec!["jellyfin:track:b", "jellyfin:track:c"]);
     }
 
     /// Rule: a row you queued is put back until Spotify confirms it, in
@@ -13645,27 +13217,31 @@ mod tests {
     fn a_missing_queued_row_returns_to_its_place() {
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.manual_queue = vec!["spotify:track:b".into(), "spotify:track:c".into()];
+        app.manual_queue = vec!["jellyfin:track:b".into(), "jellyfin:track:c".into()];
         app.pending_queue_adds = vec![PendingQueueAdd {
-            item: queued_song("spotify:track:c"),
+            item: queued_song("jellyfin:track:c"),
             at: Instant::now(),
             manual_index: 1,
             write: None,
         }];
         // Spotify's answer knows b already but not c yet.
         app.queue = loaded_queue(
-            "spotify:track:a",
-            &["spotify:track:b", "spotify:track:ctx1"],
+            "jellyfin:track:a",
+            &["jellyfin:track:b", "jellyfin:track:ctx1"],
         );
         app.reconcile_pending_queue();
         let (_, next) = queue_uris(&app);
         assert_eq!(
             next,
-            vec!["spotify:track:b", "spotify:track:c", "spotify:track:ctx1"],
+            vec![
+                "jellyfin:track:b",
+                "jellyfin:track:c",
+                "jellyfin:track:ctx1"
+            ],
             "the missing row comes back after the queued section"
         );
     }
@@ -13675,14 +13251,14 @@ mod tests {
     #[test]
     fn the_queued_section_covers_only_the_users_own_rows() {
         let mut app = headless_app();
-        app.manual_queue = vec!["spotify:track:b".into(), "spotify:track:c".into()];
+        app.manual_queue = vec!["jellyfin:track:b".into(), "jellyfin:track:c".into()];
         app.queue = loaded_queue(
-            "spotify:track:a",
+            "jellyfin:track:a",
             &[
-                "spotify:track:b",
-                "spotify:track:c",
-                "spotify:track:ctx1",
-                "spotify:track:c",
+                "jellyfin:track:b",
+                "jellyfin:track:c",
+                "jellyfin:track:ctx1",
+                "jellyfin:track:c",
             ],
         );
         assert_eq!(
@@ -13698,7 +13274,7 @@ mod tests {
     #[test]
     fn changing_shuffle_schedules_a_queue_recheck() {
         let mut app = headless_app();
-        app.queue = loaded_queue("spotify:track:a", &["spotify:track:b"]);
+        app.queue = loaded_queue("jellyfin:track:a", &["jellyfin:track:b"]);
         assert!(app.queue_recheck_at.is_none());
         app.set_shuffle(true);
         assert!(
@@ -13717,18 +13293,18 @@ mod tests {
             username: "alice".into(),
         };
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:playing".into(),
+            uri: "jellyfin:track:playing".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.manual_queue = vec!["spotify:track:manual1".into()];
+        app.manual_queue = vec!["jellyfin:track:manual1".into()];
         app.queue = loaded_queue(
-            "spotify:track:playing",
+            "jellyfin:track:playing",
             &[
-                "spotify:track:manual1",
-                "spotify:track:ctx1",
-                "spotify:track:ctx2",
-                "spotify:track:ctx3",
+                "jellyfin:track:manual1",
+                "jellyfin:track:ctx1",
+                "jellyfin:track:ctx2",
+                "jellyfin:track:ctx3",
             ],
         );
         assert_eq!(app.queued_rows_len(), 1);
@@ -13746,12 +13322,12 @@ mod tests {
 
         // A response from before the shuffle command is dropped unread.
         let old_response = Queue {
-            currently_playing: Some(queued_song("spotify:track:playing")),
+            currently_playing: Some(queued_song("jellyfin:track:playing")),
             queue: vec![
-                queued_song("spotify:track:manual1"),
-                queued_song("spotify:track:ctx1"),
-                queued_song("spotify:track:ctx2"),
-                queued_song("spotify:track:ctx3"),
+                queued_song("jellyfin:track:manual1"),
+                queued_song("jellyfin:track:ctx1"),
+                queued_song("jellyfin:track:ctx2"),
+                queued_song("jellyfin:track:ctx3"),
             ],
         };
         app.handle_api(ApiResponse::Queue {
@@ -13762,10 +13338,10 @@ mod tests {
         assert_eq!(
             next,
             vec![
-                "spotify:track:manual1",
-                "spotify:track:ctx1",
-                "spotify:track:ctx2",
-                "spotify:track:ctx3",
+                "jellyfin:track:manual1",
+                "jellyfin:track:ctx1",
+                "jellyfin:track:ctx2",
+                "jellyfin:track:ctx3",
             ],
             "the superseded pre-shuffle response is dropped unread"
         );
@@ -13773,12 +13349,12 @@ mod tests {
         // When the fresh response arrives, the context rows reflect the new shuffle
         // order while manually queued rows stay on top.
         let shuffled_response = Queue {
-            currently_playing: Some(queued_song("spotify:track:playing")),
+            currently_playing: Some(queued_song("jellyfin:track:playing")),
             queue: vec![
-                queued_song("spotify:track:manual1"),
-                queued_song("spotify:track:ctx3"),
-                queued_song("spotify:track:ctx1"),
-                queued_song("spotify:track:ctx2"),
+                queued_song("jellyfin:track:manual1"),
+                queued_song("jellyfin:track:ctx3"),
+                queued_song("jellyfin:track:ctx1"),
+                queued_song("jellyfin:track:ctx2"),
             ],
         };
         app.handle_api(ApiResponse::Queue {
@@ -13787,14 +13363,14 @@ mod tests {
         });
 
         let (current, next) = queue_uris(&app);
-        assert_eq!(current.as_deref(), Some("spotify:track:playing"));
+        assert_eq!(current.as_deref(), Some("jellyfin:track:playing"));
         assert_eq!(
             next,
             vec![
-                "spotify:track:manual1",
-                "spotify:track:ctx3",
-                "spotify:track:ctx1",
-                "spotify:track:ctx2",
+                "jellyfin:track:manual1",
+                "jellyfin:track:ctx3",
+                "jellyfin:track:ctx1",
+                "jellyfin:track:ctx2",
             ],
             "the user's song stays on top and the shuffled context order is shown"
         );
@@ -13826,7 +13402,7 @@ mod tests {
                 }),
                 item: Some(crate::api::models::PlayableItem::Track(
                     crate::api::models::Track {
-                        uri: "spotify:track:playing".into(),
+                        uri: "jellyfin:track:playing".into(),
                         ..Default::default()
                     },
                 )),
@@ -13836,13 +13412,13 @@ mod tests {
             },
             received_at: Instant::now(),
         });
-        app.manual_queue = vec!["spotify:track:manual1".into()];
+        app.manual_queue = vec!["jellyfin:track:manual1".into()];
         app.queue = loaded_queue(
-            "spotify:track:playing",
+            "jellyfin:track:playing",
             &[
-                "spotify:track:manual1",
-                "spotify:track:ctx1",
-                "spotify:track:ctx2",
+                "jellyfin:track:manual1",
+                "jellyfin:track:ctx1",
+                "jellyfin:track:ctx2",
             ],
         );
         assert_eq!(app.queued_rows_len(), 1);
@@ -13867,11 +13443,11 @@ mod tests {
 
         // An older response is ignored.
         let stale = Queue {
-            currently_playing: Some(queued_song("spotify:track:playing")),
+            currently_playing: Some(queued_song("jellyfin:track:playing")),
             queue: vec![
-                queued_song("spotify:track:manual1"),
-                queued_song("spotify:track:ctx1"),
-                queued_song("spotify:track:ctx2"),
+                queued_song("jellyfin:track:manual1"),
+                queued_song("jellyfin:track:ctx1"),
+                queued_song("jellyfin:track:ctx2"),
             ],
         };
         app.handle_api(ApiResponse::Queue {
@@ -13881,19 +13457,19 @@ mod tests {
         assert_eq!(
             queue_uris(&app).1,
             vec![
-                "spotify:track:manual1",
-                "spotify:track:ctx1",
-                "spotify:track:ctx2",
+                "jellyfin:track:manual1",
+                "jellyfin:track:ctx1",
+                "jellyfin:track:ctx2",
             ]
         );
 
         // The confirming response shows the new shuffle order.
         let shuffled = Queue {
-            currently_playing: Some(queued_song("spotify:track:playing")),
+            currently_playing: Some(queued_song("jellyfin:track:playing")),
             queue: vec![
-                queued_song("spotify:track:manual1"),
-                queued_song("spotify:track:ctx2"),
-                queued_song("spotify:track:ctx1"),
+                queued_song("jellyfin:track:manual1"),
+                queued_song("jellyfin:track:ctx2"),
+                queued_song("jellyfin:track:ctx1"),
             ],
         };
         app.handle_api(ApiResponse::Queue {
@@ -13902,13 +13478,13 @@ mod tests {
         });
 
         let (current, next) = queue_uris(&app);
-        assert_eq!(current.as_deref(), Some("spotify:track:playing"));
+        assert_eq!(current.as_deref(), Some("jellyfin:track:playing"));
         assert_eq!(
             next,
             vec![
-                "spotify:track:manual1",
-                "spotify:track:ctx2",
-                "spotify:track:ctx1",
+                "jellyfin:track:manual1",
+                "jellyfin:track:ctx2",
+                "jellyfin:track:ctx1",
             ],
             "remote shuffle preserves hand-queued songs and updates context rows"
         );
@@ -13927,20 +13503,20 @@ mod tests {
         };
         app.local_ready = true;
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:playing".into(),
+            uri: "jellyfin:track:playing".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
         app.manual_queue = vec![
-            "spotify:track:manual1".into(),
-            "spotify:track:manual2".into(),
+            "jellyfin:track:manual1".into(),
+            "jellyfin:track:manual2".into(),
         ];
         app.queue = loaded_queue(
-            "spotify:track:playing",
+            "jellyfin:track:playing",
             &[
-                "spotify:track:manual1",
-                "spotify:track:manual2",
-                "spotify:track:ctx1",
+                "jellyfin:track:manual1",
+                "jellyfin:track:manual2",
+                "jellyfin:track:ctx1",
             ],
         );
 
@@ -13952,9 +13528,9 @@ mod tests {
         app.apply(Action::MoveInQueue { from: 0, to: 2 }, &ctx);
 
         let reordered = vec![
-            "spotify:track:manual2".to_string(),
-            "spotify:track:manual1".to_string(),
-            "spotify:track:ctx1".to_string(),
+            "jellyfin:track:manual2".to_string(),
+            "jellyfin:track:manual1".to_string(),
+            "jellyfin:track:ctx1".to_string(),
         ];
         assert_eq!(
             queue_uris(&app).1,
@@ -13965,11 +13541,11 @@ mod tests {
         // The request that was already outstanding lands after the move,
         // still reporting the pre-drag order. It must be superseded.
         let pre_drag_response = Queue {
-            currently_playing: Some(queued_song("spotify:track:playing")),
+            currently_playing: Some(queued_song("jellyfin:track:playing")),
             queue: vec![
-                queued_song("spotify:track:manual1"),
-                queued_song("spotify:track:manual2"),
-                queued_song("spotify:track:ctx1"),
+                queued_song("jellyfin:track:manual1"),
+                queued_song("jellyfin:track:manual2"),
+                queued_song("jellyfin:track:ctx1"),
             ],
         };
         app.handle_api(ApiResponse::Queue {
@@ -14002,11 +13578,11 @@ mod tests {
 
         // Once the resync has landed, the confirmed order is accepted.
         let resynced_response = Queue {
-            currently_playing: Some(queued_song("spotify:track:playing")),
+            currently_playing: Some(queued_song("jellyfin:track:playing")),
             queue: vec![
-                queued_song("spotify:track:manual2"),
-                queued_song("spotify:track:manual1"),
-                queued_song("spotify:track:ctx1"),
+                queued_song("jellyfin:track:manual2"),
+                queued_song("jellyfin:track:manual1"),
+                queued_song("jellyfin:track:ctx1"),
             ],
         };
         app.handle_api(ApiResponse::Queue {
@@ -14028,34 +13604,38 @@ mod tests {
         };
         app.local_ready = true;
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:playing".into(),
+            uri: "jellyfin:track:playing".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
         app.manual_queue = vec![
-            "spotify:track:m0".into(),
-            "spotify:track:m1".into(),
-            "spotify:track:m2".into(),
+            "jellyfin:track:m0".into(),
+            "jellyfin:track:m1".into(),
+            "jellyfin:track:m2".into(),
         ];
         app.queue = loaded_queue(
-            "spotify:track:playing",
-            &["spotify:track:m0", "spotify:track:m1", "spotify:track:m2"],
+            "jellyfin:track:playing",
+            &[
+                "jellyfin:track:m0",
+                "jellyfin:track:m1",
+                "jellyfin:track:m2",
+            ],
         );
         app.pending_queue_adds = vec![
             PendingQueueAdd {
-                item: queued_song("spotify:track:m0"),
+                item: queued_song("jellyfin:track:m0"),
                 at: Instant::now(),
                 manual_index: 0,
                 write: None,
             },
             PendingQueueAdd {
-                item: queued_song("spotify:track:m1"),
+                item: queued_song("jellyfin:track:m1"),
                 at: Instant::now(),
                 manual_index: 1,
                 write: None,
             },
             PendingQueueAdd {
-                item: queued_song("spotify:track:m2"),
+                item: queued_song("jellyfin:track:m2"),
                 at: Instant::now(),
                 manual_index: 2,
                 write: None,
@@ -14068,7 +13648,11 @@ mod tests {
 
         assert_eq!(
             app.manual_queue,
-            ["spotify:track:m1", "spotify:track:m2", "spotify:track:m0"]
+            [
+                "jellyfin:track:m1",
+                "jellyfin:track:m2",
+                "jellyfin:track:m0"
+            ]
         );
         assert_eq!(app.pending_queue_adds.len(), 3);
         for addition in &app.pending_queue_adds {
@@ -14089,22 +13673,22 @@ mod tests {
         };
         app.local_ready = true;
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:playing".into(),
+            uri: "jellyfin:track:playing".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
         app.manual_queue = vec![
-            "spotify:track:a".into(),
-            "spotify:track:b".into(),
-            "spotify:track:c".into(),
+            "jellyfin:track:a".into(),
+            "jellyfin:track:b".into(),
+            "jellyfin:track:c".into(),
         ];
         app.queue = loaded_queue(
-            "spotify:track:playing",
+            "jellyfin:track:playing",
             &[
-                "spotify:track:a",
-                "spotify:track:b",
-                "spotify:track:c",
-                "spotify:track:ctx",
+                "jellyfin:track:a",
+                "jellyfin:track:b",
+                "jellyfin:track:c",
+                "jellyfin:track:ctx",
             ],
         );
         app
@@ -14120,8 +13704,8 @@ mod tests {
         let ctx = egui::Context::default();
         // Mid-resync, the engine reports the context with no queued songs.
         let mid_resync = Queue {
-            currently_playing: Some(queued_song("spotify:track:playing")),
-            queue: vec![queued_song("spotify:track:ctx")],
+            currently_playing: Some(queued_song("jellyfin:track:playing")),
+            queue: vec![queued_song("jellyfin:track:ctx")],
         };
         let answer_stale = |app: &mut App| {
             app.refresh_queue(true);
@@ -14138,10 +13722,10 @@ mod tests {
         }
         app.apply(Action::MoveInQueue { from: 2, to: 0 }, &ctx);
         let moved = vec![
-            "spotify:track:c".to_string(),
-            "spotify:track:b".to_string(),
-            "spotify:track:a".to_string(),
-            "spotify:track:ctx".to_string(),
+            "jellyfin:track:c".to_string(),
+            "jellyfin:track:b".to_string(),
+            "jellyfin:track:a".to_string(),
+            "jellyfin:track:ctx".to_string(),
         ];
         for _ in 0..QUEUE_STALE_RETRIES - 1 {
             answer_stale(&mut app);
@@ -14162,12 +13746,12 @@ mod tests {
         let mut app = app_with_local_manual_queue();
         // Spotify's answer was accepted with two queued rows swapped.
         app.queue = loaded_queue(
-            "spotify:track:playing",
+            "jellyfin:track:playing",
             &[
-                "spotify:track:b",
-                "spotify:track:a",
-                "spotify:track:c",
-                "spotify:track:ctx",
+                "jellyfin:track:b",
+                "jellyfin:track:a",
+                "jellyfin:track:c",
+                "jellyfin:track:ctx",
             ],
         );
         let ctx = egui::Context::default();
@@ -14176,15 +13760,15 @@ mod tests {
 
         assert_eq!(
             app.manual_queue,
-            ["spotify:track:a", "spotify:track:c", "spotify:track:b"]
+            ["jellyfin:track:a", "jellyfin:track:c", "jellyfin:track:b"]
         );
         assert_eq!(
             queue_uris(&app).1,
             [
-                "spotify:track:a",
-                "spotify:track:c",
-                "spotify:track:b",
-                "spotify:track:ctx",
+                "jellyfin:track:a",
+                "jellyfin:track:c",
+                "jellyfin:track:b",
+                "jellyfin:track:ctx",
             ],
             "the rows must match the order sent to the engine"
         );
@@ -14200,24 +13784,24 @@ mod tests {
         };
         app.local_ready = true;
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:playing".into(),
+            uri: "jellyfin:track:playing".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.manual_queue = vec!["spotify:track:m0".into(), "spotify:track:m1".into()];
+        app.manual_queue = vec!["jellyfin:track:m0".into(), "jellyfin:track:m1".into()];
         app.queue = loaded_queue(
-            "spotify:track:playing",
-            &["spotify:track:m0", "spotify:track:m1"],
+            "jellyfin:track:playing",
+            &["jellyfin:track:m0", "jellyfin:track:m1"],
         );
         app.pending_queue_adds = vec![
             PendingQueueAdd {
-                item: queued_song("spotify:track:m0"),
+                item: queued_song("jellyfin:track:m0"),
                 at: Instant::now(),
                 manual_index: 0,
                 write: None,
             },
             PendingQueueAdd {
-                item: queued_song("spotify:track:m1"),
+                item: queued_song("jellyfin:track:m1"),
                 at: Instant::now(),
                 manual_index: 1,
                 write: None,
@@ -14228,7 +13812,7 @@ mod tests {
         // Drop "new" between "m0" and "m1": "m1"'s pending entry must shift.
         app.apply(
             Action::InsertInQueue {
-                items: vec![queued_song("spotify:track:new")],
+                items: vec![queued_song("jellyfin:track:new")],
                 position: 1,
             },
             &ctx,
@@ -14236,7 +13820,11 @@ mod tests {
 
         assert_eq!(
             app.manual_queue,
-            ["spotify:track:m0", "spotify:track:new", "spotify:track:m1"]
+            [
+                "jellyfin:track:m0",
+                "jellyfin:track:new",
+                "jellyfin:track:m1"
+            ]
         );
         assert_eq!(app.pending_queue_adds.len(), 3);
         for addition in &app.pending_queue_adds {
@@ -14257,13 +13845,13 @@ mod tests {
             username: "alice".into(),
         };
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:playing".into(),
+            uri: "jellyfin:track:playing".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
         app.queue = loaded_queue(
-            "spotify:track:playing",
-            &["spotify:track:ctx1", "spotify:track:ctx2"],
+            "jellyfin:track:playing",
+            &["jellyfin:track:ctx1", "jellyfin:track:ctx2"],
         );
 
         app.set_shuffle(true);
@@ -14272,10 +13860,10 @@ mod tests {
 
         // A stale response that reports an old playing track is rejected.
         let stale_track_response = Queue {
-            currently_playing: Some(queued_song("spotify:track:old_song")),
+            currently_playing: Some(queued_song("jellyfin:track:old_song")),
             queue: vec![
-                queued_song("spotify:track:ctx2"),
-                queued_song("spotify:track:ctx1"),
+                queued_song("jellyfin:track:ctx2"),
+                queued_song("jellyfin:track:ctx1"),
             ],
         };
         app.handle_api(ApiResponse::Queue {
@@ -14285,7 +13873,7 @@ mod tests {
 
         assert_eq!(
             queue_uris(&app).1,
-            vec!["spotify:track:ctx1", "spotify:track:ctx2"],
+            vec!["jellyfin:track:ctx1", "jellyfin:track:ctx2"],
             "the queue remains uncorrupted by the stale response"
         );
         assert_eq!(app.queue_stale_retries, 1);
@@ -14301,18 +13889,18 @@ mod tests {
             username: "alice".into(),
         };
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:playing".into(),
+            uri: "jellyfin:track:playing".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
-        app.manual_queue = vec!["spotify:track:manual1".into()];
+        app.manual_queue = vec!["jellyfin:track:manual1".into()];
         app.queue = loaded_queue(
-            "spotify:track:playing",
+            "jellyfin:track:playing",
             &[
-                "spotify:track:manual1",
-                "spotify:track:ctx1",
-                "spotify:track:ctx2",
-                "spotify:track:ctx3",
+                "jellyfin:track:manual1",
+                "jellyfin:track:ctx1",
+                "jellyfin:track:ctx2",
+                "jellyfin:track:ctx3",
             ],
         );
 
@@ -14323,12 +13911,12 @@ mod tests {
         // A lagging response arrives with the same currently playing track and
         // the current sequence, but the context rows are still in the old order.
         let lagging_response = Queue {
-            currently_playing: Some(queued_song("spotify:track:playing")),
+            currently_playing: Some(queued_song("jellyfin:track:playing")),
             queue: vec![
-                queued_song("spotify:track:manual1"),
-                queued_song("spotify:track:ctx1"),
-                queued_song("spotify:track:ctx2"),
-                queued_song("spotify:track:ctx3"),
+                queued_song("jellyfin:track:manual1"),
+                queued_song("jellyfin:track:ctx1"),
+                queued_song("jellyfin:track:ctx2"),
+                queued_song("jellyfin:track:ctx3"),
             ],
         };
 
@@ -14344,10 +13932,10 @@ mod tests {
         assert_eq!(
             queue_uris(&app).1,
             vec![
-                "spotify:track:manual1",
-                "spotify:track:ctx1",
-                "spotify:track:ctx2",
-                "spotify:track:ctx3",
+                "jellyfin:track:manual1",
+                "jellyfin:track:ctx1",
+                "jellyfin:track:ctx2",
+                "jellyfin:track:ctx3",
             ]
         );
 
@@ -14361,12 +13949,12 @@ mod tests {
 
         // Once the reordered response arrives, it is accepted and pending state clears.
         let new_order_response = Queue {
-            currently_playing: Some(queued_song("spotify:track:playing")),
+            currently_playing: Some(queued_song("jellyfin:track:playing")),
             queue: vec![
-                queued_song("spotify:track:manual1"),
-                queued_song("spotify:track:ctx3"),
-                queued_song("spotify:track:ctx1"),
-                queued_song("spotify:track:ctx2"),
+                queued_song("jellyfin:track:manual1"),
+                queued_song("jellyfin:track:ctx3"),
+                queued_song("jellyfin:track:ctx1"),
+                queued_song("jellyfin:track:ctx2"),
             ],
         };
 
@@ -14380,15 +13968,15 @@ mod tests {
         assert_eq!(
             queue_uris(&app).1,
             vec![
-                "spotify:track:manual1",
-                "spotify:track:ctx3",
-                "spotify:track:ctx1",
-                "spotify:track:ctx2",
+                "jellyfin:track:manual1",
+                "jellyfin:track:ctx3",
+                "jellyfin:track:ctx1",
+                "jellyfin:track:ctx2",
             ]
         );
     }
 
-    /// If Spotify returns an unchanged queue order after shuffle, Spotifast
+    /// If Spotify returns an unchanged queue order after shuffle, Jellifast
     /// retries up to the limit and then accepts the result as a bounded fallback.
     #[test]
     fn unchanged_shuffle_result_has_bounded_fallback() {
@@ -14397,13 +13985,13 @@ mod tests {
             username: "alice".into(),
         };
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:playing".into(),
+            uri: "jellyfin:track:playing".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
         app.queue = loaded_queue(
-            "spotify:track:playing",
-            &["spotify:track:ctx1", "spotify:track:ctx2"],
+            "jellyfin:track:playing",
+            &["jellyfin:track:ctx1", "jellyfin:track:ctx2"],
         );
 
         app.set_shuffle(true);
@@ -14411,10 +13999,10 @@ mod tests {
         let seq = app.queue_seq;
 
         let unchanged_response = Queue {
-            currently_playing: Some(queued_song("spotify:track:playing")),
+            currently_playing: Some(queued_song("jellyfin:track:playing")),
             queue: vec![
-                queued_song("spotify:track:ctx1"),
-                queued_song("spotify:track:ctx2"),
+                queued_song("jellyfin:track:ctx1"),
+                queued_song("jellyfin:track:ctx2"),
             ],
         };
 
@@ -14428,7 +14016,7 @@ mod tests {
             assert!(app.queue_recheck_at.is_some());
         }
 
-        // The next response exceeds the retry limit, so Spotifast accepts it.
+        // The next response exceeds the retry limit, so Jellifast accepts it.
         app.handle_api(ApiResponse::Queue {
             seq,
             result: Ok(unchanged_response),
@@ -14437,7 +14025,7 @@ mod tests {
         assert!(app.queue_shuffle_pending.is_none());
         assert_eq!(
             queue_uris(&app).1,
-            vec!["spotify:track:ctx1", "spotify:track:ctx2"]
+            vec!["jellyfin:track:ctx1", "jellyfin:track:ctx2"]
         );
     }
 
@@ -14524,208 +14112,6 @@ mod tests {
         app.pick_row(&album, "v", 2, RowPick::Only, 10);
         assert_eq!(picked(&app, &album), vec![2]);
         assert!(picked(&app, &liked).is_empty());
-    }
-
-    fn search_page(id: &str) -> crate::api::models::Page<Playlist> {
-        crate::api::models::Page {
-            items: vec![Playlist {
-                id: id.into(),
-                ..Playlist::default()
-            }],
-            ..Default::default()
-        }
-    }
-
-    fn catalogue_answer() -> crate::api::models::SearchResults {
-        crate::api::models::SearchResults {
-            tracks: Some(crate::api::models::Page {
-                items: vec![Track::default()],
-                ..Default::default()
-            }),
-            ..Default::default()
-        }
-    }
-
-    fn searching(app: &mut App, query: &str) -> u64 {
-        app.search.query = query.into();
-        app.run_search(query.into());
-        let serial = app.search.serial;
-        app.handle_api(ApiResponse::SearchStarted {
-            query: query.into(),
-            serial,
-            split: true,
-        });
-        serial
-    }
-
-    #[test]
-    fn each_half_of_a_search_shows_as_it_arrives() {
-        for playlists_first in [false, true] {
-            let mut app = test_app("search-halves");
-            let serial = searching(&mut app, "radiohead");
-            let catalogue = ApiResponse::Search {
-                query: "radiohead".into(),
-                serial,
-                result: Ok(catalogue_answer()),
-            };
-            let playlists = ApiResponse::SearchPlaylists {
-                query: "radiohead".into(),
-                serial,
-                result: Ok(search_page("p")),
-            };
-            if playlists_first {
-                app.handle_api(playlists);
-                let shown = app
-                    .search
-                    .results
-                    .get()
-                    .expect("playlists appear before catalogue");
-                assert_eq!(shown.playlists.as_ref().unwrap().items[0].id, "p");
-                assert!(shown.tracks.is_none());
-                assert!(app.search.catalogue_pending);
-                app.handle_api(catalogue);
-            } else {
-                app.handle_api(catalogue);
-                let shown = app.search.results.get().expect("results");
-                assert_eq!(shown.tracks.as_ref().unwrap().items.len(), 1);
-                assert!(shown.playlists.is_none());
-                app.handle_api(playlists);
-            }
-            let shown = app.search.results.get().expect("results");
-            assert_eq!(shown.tracks.as_ref().unwrap().items.len(), 1);
-            assert_eq!(shown.playlists.as_ref().unwrap().items[0].id, "p");
-        }
-    }
-
-    #[test]
-    fn playlists_from_an_older_search_never_join_a_newer_one() {
-        let mut app = test_app("search-stale-playlists");
-        let stale = searching(&mut app, "radiohead");
-        app.handle_api(ApiResponse::SearchPlaylists {
-            query: "radiohead".into(),
-            serial: stale,
-            result: Ok(search_page("stale")),
-        });
-        let serial = searching(&mut app, "portishead");
-        app.handle_api(ApiResponse::Search {
-            query: "portishead".into(),
-            serial,
-            result: Ok(catalogue_answer()),
-        });
-        let shown = app.search.results.get().expect("results");
-        assert!(shown.playlists.is_none());
-    }
-
-    #[test]
-    fn failed_search_halves_never_mix_queries_or_discard_the_successful_half() {
-        for playlists_fail in [false, true] {
-            for failure_first in [false, true] {
-                let mut app = test_app("search-half-failure");
-                let old = searching(&mut app, "old");
-                app.handle_api(ApiResponse::Search {
-                    query: "old".into(),
-                    serial: old,
-                    result: Ok(catalogue_answer()),
-                });
-                let serial = searching(&mut app, "new");
-                assert!(
-                    app.search.results.get().is_none(),
-                    "old songs cannot label a new query"
-                );
-                let failure = if playlists_fail {
-                    ApiResponse::SearchPlaylists {
-                        query: "new".into(),
-                        serial,
-                        result: Err(crate::api::ApiError::RateLimited),
-                    }
-                } else {
-                    ApiResponse::Search {
-                        query: "new".into(),
-                        serial,
-                        result: Err(crate::api::ApiError::RateLimited),
-                    }
-                };
-                let success = if playlists_fail {
-                    ApiResponse::Search {
-                        query: "new".into(),
-                        serial,
-                        result: Ok(catalogue_answer()),
-                    }
-                } else {
-                    ApiResponse::SearchPlaylists {
-                        query: "new".into(),
-                        serial,
-                        result: Ok(search_page("new")),
-                    }
-                };
-                if failure_first {
-                    app.handle_api(failure);
-                    assert!(matches!(app.search.results, Loadable::Loading));
-                    app.handle_api(success);
-                } else {
-                    app.handle_api(success);
-                    assert!(app.search.results.get().is_some());
-                    app.handle_api(failure);
-                }
-                let shown = app.search.results.get().expect("successful half survives");
-                assert_eq!(shown.tracks.is_some(), playlists_fail);
-                assert_eq!(shown.playlists.is_some(), !playlists_fail);
-                assert_eq!(app.search.results_serial, serial);
-                assert!(app.search.error.is_some());
-                assert!(!app.search.catalogue_pending && !app.search.playlists_pending);
-                app.backend.shutdown();
-            }
-        }
-    }
-
-    #[test]
-    fn both_search_failures_finish_loading_and_the_same_query_can_retry() {
-        let mut app = test_app("search-both-fail");
-        let serial = searching(&mut app, "new");
-        app.handle_api(ApiResponse::Search {
-            query: "new".into(),
-            serial,
-            result: Err(crate::api::ApiError::RateLimited),
-        });
-        app.handle_api(ApiResponse::SearchPlaylists {
-            query: "new".into(),
-            serial,
-            result: Err(crate::api::ApiError::RateLimited),
-        });
-        assert!(matches!(app.search.results, Loadable::Failed(_)));
-        assert!(!app.search.catalogue_pending && !app.search.playlists_pending);
-        app.run_search("new".into());
-        assert!(app.search.serial > serial);
-        assert!(app.search.error.is_none());
-        assert!(matches!(app.search.results, Loadable::Loading));
-        app.backend.shutdown();
-    }
-
-    #[test]
-    fn clearing_or_signing_out_rejects_both_late_search_halves() {
-        for sign_out in [false, true] {
-            let mut app = test_app("search-cancel");
-            let serial = searching(&mut app, "old");
-            if sign_out {
-                app.reset_data();
-            } else {
-                app.run_search(String::new());
-            }
-            app.handle_api(ApiResponse::Search {
-                query: "old".into(),
-                serial,
-                result: Ok(catalogue_answer()),
-            });
-            app.handle_api(ApiResponse::SearchPlaylists {
-                query: "old".into(),
-                serial,
-                result: Ok(search_page("old")),
-            });
-            assert!(matches!(app.search.results, Loadable::NotLoaded));
-            assert!(app.search.playlists.is_none());
-            assert!(!app.search.catalogue_pending && !app.search.playlists_pending);
-            app.backend.shutdown();
-        }
     }
 
     fn cover_dialog(request: Option<u64>) -> Dialog {
@@ -14830,7 +14216,13 @@ mod tests {
         };
         assert!(draft.uploading.is_none());
         assert!(draft.selection.is_some());
-        assert!(draft.error.as_ref().unwrap().contains("sign in again"));
+        assert!(
+            draft
+                .error
+                .as_ref()
+                .unwrap()
+                .contains("may edit this playlist")
+        );
         app.library.playlists = Loadable::Loaded(vec![Playlist {
             id: "pl1".into(),
             ..Default::default()
@@ -15086,7 +14478,7 @@ mod tests {
 
     fn test_app(name: &str) -> App {
         let root =
-            std::env::temp_dir().join(format!("spotifast-{name}-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-{name}-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let mut app = App::new(
             &Waker::default(),
@@ -15403,7 +14795,7 @@ mod tests {
         let ctx = egui::Context::default();
         app.settings = Settings::default();
         app.window_hidden = true;
-        app.resume_track = Some("spotify:track:playing".into());
+        app.resume_track = Some("jellyfin:track:playing".into());
         app.resume_position_ms = 123_000;
         let theme = theme::CustomTheme {
             filename: "omarchy.json".into(),
@@ -15451,7 +14843,7 @@ mod tests {
         assert!(app.settings.system_theme_cache.is_none());
         assert_eq!(app.theme_preference(), egui::ThemePreference::System);
         assert!(app.window_hidden);
-        assert_eq!(app.resume_track.as_deref(), Some("spotify:track:playing"));
+        assert_eq!(app.resume_track.as_deref(), Some("jellyfin:track:playing"));
         assert_eq!(app.resume_position_ms, 123_000);
         std::fs::remove_dir_all(app.dirs.config.parent().unwrap()).unwrap();
     }
@@ -15498,7 +14890,7 @@ mod tests {
 
         app.window_hidden = true;
         app.settings.volume = 37;
-        app.resume_track = Some("spotify:track:playing".into());
+        app.resume_track = Some("jellyfin:track:playing".into());
         app.resume_position_ms = 123_000;
         let queue: std::sync::Arc<std::sync::Mutex<Vec<ControlCommand>>> = Default::default();
         app.control_commands = Some(queue.clone());
@@ -15518,7 +14910,7 @@ mod tests {
             assert_eq!(app.palette, expected);
             assert!(app.window_hidden);
             assert_eq!(app.settings.volume, 37);
-            assert_eq!(app.resume_track.as_deref(), Some("spotify:track:playing"));
+            assert_eq!(app.resume_track.as_deref(), Some("jellyfin:track:playing"));
             assert_eq!(app.resume_position_ms, 123_000);
             assert_eq!(app.settings.custom_theme.as_deref(), Some("omarchy.json"));
         }
@@ -15605,105 +14997,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn premium_listeners_discover_personal_apps_before_requests_slow_down() {
-        let mut app = test_app("personal-app-intro");
-        app.auth = AuthStatus::Connected {
-            username: "listener".into(),
-        };
-        app.user = Some(User {
-            product: Some("premium".into()),
-            ..User::default()
-        });
-        // Having seen an old transient toast does not count as seeing the intro.
-        app.settings.personal_app_nudge_at = Some("2026-09-09T10:00:00Z".into());
-        app.maybe_suggest_personal_app();
-        assert!(matches!(app.dialog, Some(Dialog::PersonalAppIntro)));
-        assert!(!app.settings.personal_app_intro_seen);
-        app.actions.push(Action::CloseDialog);
-        app.apply_actions(&egui::Context::default());
-        assert!(app.settings.personal_app_intro_seen);
-        assert!(app.dialog.is_none());
-        let saved = serde_json::to_string(&app.settings).unwrap();
-        let mut restarted = test_app("personal-app-intro-restart");
-        restarted.settings = serde_json::from_str(&saved).unwrap();
-        restarted.auth = app.auth.clone();
-        restarted.user = app.user.clone();
-        restarted.maybe_suggest_personal_app();
-        assert!(restarted.dialog.is_none(), "dismissal survives a restart");
-        assert!(app.toasts.is_empty(), "the old daily reminder is replaced");
-    }
-
-    #[test]
-    fn personal_app_intro_waits_for_a_premium_account_using_shared_access() {
-        let mut app = test_app("personal-app-intro-eligibility");
-        app.auth = AuthStatus::Connected {
-            username: "listener".into(),
-        };
-        for product in [None, Some("free"), Some("open")] {
-            app.user = Some(User {
-                product: product.map(str::to_string),
-                ..User::default()
-            });
-            app.maybe_suggest_personal_app();
-            assert!(app.dialog.is_none());
-        }
-        app.user = Some(User {
-            product: Some("premium".into()),
-            ..User::default()
-        });
-        app.settings.web_client_id = Some("personal-client".into());
-        app.maybe_suggest_personal_app();
-        assert!(app.dialog.is_none());
-        app.settings.web_client_id = None;
-        app.web_app = Some("personal-client".into());
-        app.maybe_suggest_personal_app();
-        assert!(app.dialog.is_none());
-        app.web_app = None;
-        app.auth = AuthStatus::SignedOut;
-        app.maybe_suggest_personal_app();
-        assert!(app.dialog.is_none());
-        app.auth = AuthStatus::Connected {
-            username: "listener".into(),
-        };
-        app.offline = true;
-        app.maybe_suggest_personal_app();
-        assert!(app.dialog.is_none());
-    }
-
-    #[test]
-    fn personal_app_intro_defers_while_another_surface_is_in_use() {
-        let mut app = test_app("personal-app-intro-defer");
-        app.auth = AuthStatus::Connected {
-            username: "listener".into(),
-        };
-        app.user = Some(User {
-            product: Some("premium".into()),
-            ..User::default()
-        });
-        app.dialog = Some(Dialog::Shortcuts);
-        app.maybe_suggest_personal_app();
-        assert!(matches!(app.dialog, Some(Dialog::Shortcuts)));
-        app.dialog = None;
-        app.show_devices = true;
-        app.maybe_suggest_personal_app();
-        assert!(app.dialog.is_none());
-        app.show_devices = false;
-        app.settings.winamp_window = true;
-        app.maybe_suggest_personal_app();
-        assert!(app.dialog.is_none());
-        app.settings.winamp_window = false;
-        app.open(Page::Settings);
-        app.maybe_suggest_personal_app();
-        assert!(app.dialog.is_none());
-        app.open(Page::Home);
-        app.maybe_suggest_personal_app();
-        assert!(matches!(app.dialog, Some(Dialog::PersonalAppIntro)));
-        app.handle_auth(AuthStatus::SignedOut);
-        assert!(app.dialog.is_none());
-        assert!(!app.settings.personal_app_intro_seen);
-    }
-
     fn play(uri: &str, at: &str) -> crate::api::models::PlayHistory {
         crate::api::models::PlayHistory {
             track: crate::api::models::Track {
@@ -15736,9 +15029,9 @@ mod tests {
         let mut app = test_app("recents-repeat");
         let page = history(
             vec![
-                play("spotify:track:a", "2026-09-01T10:00:00Z"),
-                play("spotify:track:a", "2026-09-01T09:00:00Z"),
-                play("spotify:track:b", "2026-09-01T08:00:00Z"),
+                play("jellyfin:track:a", "2026-09-01T10:00:00Z"),
+                play("jellyfin:track:a", "2026-09-01T09:00:00Z"),
+                play("jellyfin:track:b", "2026-09-01T08:00:00Z"),
             ],
             Some("cursor-1"),
         );
@@ -15753,8 +15046,8 @@ mod tests {
         app.absorb_recents(
             history(
                 vec![
-                    play("spotify:track:a", "2026-09-01T10:00:00Z"),
-                    play("spotify:track:b", "2026-09-01T09:00:00Z"),
+                    play("jellyfin:track:a", "2026-09-01T10:00:00Z"),
+                    play("jellyfin:track:b", "2026-09-01T09:00:00Z"),
                 ],
                 Some("cursor-1"),
             ),
@@ -15763,8 +15056,8 @@ mod tests {
         app.absorb_recents(
             history(
                 vec![
-                    play("spotify:track:b", "2026-09-01T09:00:00Z"),
-                    play("spotify:track:c", "2026-09-01T08:00:00Z"),
+                    play("jellyfin:track:b", "2026-09-01T09:00:00Z"),
+                    play("jellyfin:track:c", "2026-09-01T08:00:00Z"),
                 ],
                 Some("cursor-2"),
             ),
@@ -15778,7 +15071,7 @@ mod tests {
             .collect();
         assert_eq!(
             uris,
-            vec!["spotify:track:a", "spotify:track:b", "spotify:track:c"]
+            vec!["jellyfin:track:a", "jellyfin:track:b", "jellyfin:track:c"]
         );
     }
 
@@ -15788,7 +15081,7 @@ mod tests {
         let mut app = test_app("recents-short");
         app.absorb_recents(
             history(
-                vec![play("spotify:track:a", "2026-09-01T10:00:00Z")],
+                vec![play("jellyfin:track:a", "2026-09-01T10:00:00Z")],
                 Some("more"),
             ),
             50,
@@ -15810,8 +15103,8 @@ mod tests {
         app.absorb_recents(
             history(
                 vec![
-                    play("spotify:track:a", "2026-09-01T10:00:00Z"),
-                    play("spotify:track:b", "2026-09-01T09:00:00Z"),
+                    play("jellyfin:track:a", "2026-09-01T10:00:00Z"),
+                    play("jellyfin:track:b", "2026-09-01T09:00:00Z"),
                 ],
                 Some("cursor-1"),
             ),
@@ -15850,13 +15143,13 @@ mod tests {
             history(
                 vec![
                     from(
-                        "spotify:track:a",
-                        "spotify:playlist:p1",
+                        "jellyfin:track:a",
+                        "jellyfin:playlist:p1",
                         "2026-09-01T10:00:00Z",
                     ),
                     from(
-                        "spotify:track:b",
-                        "spotify:playlist:p2",
+                        "jellyfin:track:b",
+                        "jellyfin:playlist:p2",
                         "2026-09-01T09:00:00Z",
                     ),
                 ],
@@ -15865,27 +15158,27 @@ mod tests {
         );
         assert_eq!(
             app.recent_contexts,
-            ["spotify:playlist:p1", "spotify:playlist:p2"]
+            ["jellyfin:playlist:p1", "jellyfin:playlist:p2"]
         );
         app.apply(Action::LoadMoreRecents, &ctx);
-        app.note_recent_context("spotify:album:just-played");
+        app.note_recent_context("jellyfin:album:just-played");
         answer(
             &mut app,
             history(
                 vec![
                     from(
-                        "spotify:track:c",
-                        "spotify:playlist:p3",
+                        "jellyfin:track:c",
+                        "jellyfin:playlist:p3",
                         "2026-09-01T08:00:00Z",
                     ),
                     from(
-                        "spotify:track:d",
-                        "spotify:artist:x",
+                        "jellyfin:track:d",
+                        "jellyfin:artist:x",
                         "2026-09-01T07:30:00Z",
                     ),
                     from(
-                        "spotify:track:e",
-                        "spotify:playlist:p2",
+                        "jellyfin:track:e",
+                        "jellyfin:playlist:p2",
                         "2026-09-01T07:00:00Z",
                     ),
                 ],
@@ -15896,17 +15189,17 @@ mod tests {
         assert_eq!(
             app.recent_contexts,
             [
-                "spotify:album:just-played",
-                "spotify:playlist:p1",
-                "spotify:playlist:p2",
-                "spotify:playlist:p3"
+                "jellyfin:album:just-played",
+                "jellyfin:playlist:p1",
+                "jellyfin:playlist:p2",
+                "jellyfin:playlist:p3"
             ],
             "older plays follow the newer ones"
         );
 
         // A full order has no room left for plays older than all of it.
         app.recent_contexts = (0..RECENT_CONTEXTS_KEPT)
-            .map(|index| format!("spotify:playlist:full{index}"))
+            .map(|index| format!("jellyfin:playlist:full{index}"))
             .collect();
         let full = app.recent_contexts.clone();
         app.apply(Action::LoadMoreRecents, &ctx);
@@ -15914,8 +15207,8 @@ mod tests {
             &mut app,
             history(
                 vec![from(
-                    "spotify:track:f",
-                    "spotify:playlist:p4",
+                    "jellyfin:track:f",
+                    "jellyfin:playlist:p4",
                     "2026-09-01T06:00:00Z",
                 )],
                 Some("cursor-3"),
@@ -15928,14 +15221,14 @@ mod tests {
             &mut app,
             history(
                 vec![from(
-                    "spotify:track:g",
-                    "spotify:playlist:p4",
+                    "jellyfin:track:g",
+                    "jellyfin:playlist:p4",
                     "2026-09-01T11:00:00Z",
                 )],
                 None,
             ),
         );
-        assert_eq!(app.recent_contexts[0], "spotify:playlist:p4");
+        assert_eq!(app.recent_contexts[0], "jellyfin:playlist:p4");
         assert_eq!(app.recent_contexts.len(), RECENT_CONTEXTS_KEPT);
     }
 
@@ -15973,7 +15266,7 @@ mod tests {
             items: names
                 .iter()
                 .map(|name| Artist {
-                    uri: format!("spotify:artist:{name}"),
+                    uri: format!("jellyfin:artist:{name}"),
                     ..Artist::default()
                 })
                 .collect(),
@@ -15989,7 +15282,7 @@ mod tests {
             result: Ok(artists(&["a", "b"], Some("page-2"))),
         });
         app.apply(Action::LoadMore(Page::Artists), &ctx);
-        changed(&mut app, "spotify:artist:new", true);
+        changed(&mut app, "jellyfin:artist:new", true);
         app.apply(Action::LoadMore(Page::Artists), &ctx);
         app.handle_api(ApiResponse::FollowedArtists {
             after: Some("page-2".into()),
@@ -16010,12 +15303,12 @@ mod tests {
             .iter()
             .map(|artist| artist.uri.as_str())
             .collect();
-        assert_eq!(followed, ["spotify:artist:new", "spotify:artist:a"]);
+        assert_eq!(followed, ["jellyfin:artist:new", "jellyfin:artist:a"]);
         assert_eq!(app.library.artists.after.as_deref(), Some("page-2"));
 
         // Albums, podcasts and episodes continue from an offset.
         let album = |id: &str| SavedAlbum {
-            album: web_album(&format!("spotify:album:{id}"), "album", Some("album")),
+            album: web_album(&format!("jellyfin:album:{id}"), "album", Some("album")),
             ..SavedAlbum::default()
         };
         app.apply(Action::LoadMore(Page::Albums), &ctx);
@@ -16024,7 +15317,7 @@ mod tests {
             result: Ok(page(vec![album("a"), album("b")], 0)),
         });
         app.apply(Action::LoadMore(Page::Albums), &ctx);
-        changed(&mut app, "spotify:album:c", false);
+        changed(&mut app, "jellyfin:album:c", false);
         app.handle_api(ApiResponse::SavedAlbums {
             offset: 2,
             result: Ok(page(vec![album("c")], 2)),
@@ -16035,14 +15328,14 @@ mod tests {
             "the shelf still starts from the top"
         );
         assert_eq!(
-            app.is_saved("spotify:album:c"),
+            app.is_saved("jellyfin:album:c"),
             Some(false),
             "a removed album stays removed"
         );
 
         let show = |id: &str| SavedShow {
             show: crate::api::models::Show {
-                uri: format!("spotify:show:{id}"),
+                uri: format!("jellyfin:show:{id}"),
                 ..Default::default()
             },
             ..SavedShow::default()
@@ -16053,7 +15346,7 @@ mod tests {
             result: Ok(page(vec![show("a"), show("b")], 0)),
         });
         app.apply(Action::LoadMore(Page::Podcasts), &ctx);
-        changed(&mut app, "spotify:show:new", true);
+        changed(&mut app, "jellyfin:show:new", true);
         app.handle_api(ApiResponse::SavedShows {
             offset: 2,
             result: Ok(page(vec![show("c")], 2)),
@@ -16062,7 +15355,7 @@ mod tests {
 
         let episode = |id: &str| SavedEpisode {
             episode: crate::api::models::Episode {
-                uri: format!("spotify:episode:{id}"),
+                uri: format!("jellyfin:episode:{id}"),
                 ..Default::default()
             },
             ..SavedEpisode::default()
@@ -16073,7 +15366,7 @@ mod tests {
             result: Ok(page(vec![episode("a"), episode("b")], 0)),
         });
         app.apply(Action::LoadMore(Page::Episodes), &ctx);
-        changed(&mut app, "spotify:episode:new", true);
+        changed(&mut app, "jellyfin:episode:new", true);
         app.handle_api(ApiResponse::SavedEpisodes {
             offset: 2,
             result: Ok(page(vec![episode("c")], 2)),
@@ -16083,103 +15376,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(app.dirs.config.parent().unwrap());
     }
 
-    /// Home's podcast shelf reads a bounded number of saved shows once per
-    /// Home refresh, skips known audiobooks, and keeps what it shows until
-    /// the current refresh answers.
-    #[test]
-    fn home_reads_a_few_saved_podcasts_once_per_refresh() {
-        use crate::api::models::{Episode, Page as ApiPage, SavedShow};
-        let mut app = test_app("home-podcasts");
-        let show = |index: usize| Show {
-            id: format!("s{index}"),
-            uri: format!("spotify:show:s{index}"),
-            ..Show::default()
-        };
-        app.load_home(false);
-        assert!(app.library.shows.loading, "Home asks for the saved shows");
-        assert!(app.backend.take_home_episode_requests().is_empty());
-
-        app.audiobook_shows.insert("spotify:show:s1".into());
-        app.handle_api(ApiResponse::SavedShows {
-            offset: 0,
-            result: Ok(ApiPage {
-                items: (0..12)
-                    .map(|index| SavedShow {
-                        show: show(index),
-                        ..SavedShow::default()
-                    })
-                    .collect(),
-                total: 12,
-                limit: 50,
-                offset: 0,
-                next: None,
-            }),
-        });
-        let generation = app.home.generation;
-        let expected: Vec<String> = [0, 2, 3, 4, 5, 6, 7, 8]
-            .iter()
-            .map(|index| format!("s{index}"))
-            .collect();
-        assert_eq!(
-            app.backend.take_home_episode_requests(),
-            vec![(expected, generation)]
-        );
-
-        // Visiting Home again soon, or another first page of the shows,
-        // asks for nothing more.
-        app.load_home(false);
-        app.library.shows.next_offset = Some(0);
-        app.handle_api(ApiResponse::SavedShows {
-            offset: 0,
-            result: Ok(ApiPage {
-                items: vec![SavedShow {
-                    show: show(0),
-                    ..SavedShow::default()
-                }],
-                total: 1,
-                limit: 50,
-                offset: 0,
-                next: None,
-            }),
-        });
-        assert!(app.backend.take_home_episode_requests().is_empty());
-
-        let episodes = |show_index: usize| {
-            vec![(
-                show(show_index),
-                vec![Episode {
-                    uri: format!("spotify:episode:e{show_index}"),
-                    ..Episode::default()
-                }],
-            )]
-        };
-        app.handle_api(ApiResponse::HomeEpisodes {
-            generation,
-            result: Ok(episodes(0)),
-        });
-        assert_eq!(app.home.podcasts, episodes(0));
-
-        app.load_home(true);
-        assert_eq!(app.backend.take_home_episode_requests().len(), 1);
-        app.handle_api(ApiResponse::HomeEpisodes {
-            generation,
-            result: Ok(episodes(2)),
-        });
-        assert_eq!(app.home.podcasts, episodes(0), "an older answer is ignored");
-        app.handle_api(ApiResponse::HomeEpisodes {
-            generation: app.home.generation,
-            result: Err(crate::api::ApiError::RateLimited),
-        });
-        assert_eq!(app.home.podcasts, episodes(0), "a failure keeps the shelf");
-        app.backend.shutdown();
-        let _ = std::fs::remove_dir_all(app.dirs.config.parent().unwrap());
-    }
-
     /// Closing and reopening restores queue rows and their manual split.
     #[test]
     fn the_queue_comes_back_after_a_restart() {
         let root = std::env::temp_dir().join(format!(
-            "spotifast-queue-restart-test-{}",
+            "jellifast-queue-restart-test-{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
@@ -16200,11 +15401,11 @@ mod tests {
             options,
         );
         app.local_ready = true;
-        app.resume_track = Some("spotify:track:a".into());
-        app.manual_queue = vec!["spotify:track:b".into()];
+        app.resume_track = Some("jellyfin:track:a".into());
+        app.manual_queue = vec!["jellyfin:track:b".into()];
         app.queue = loaded_queue(
-            "spotify:track:a",
-            &["spotify:track:b", "spotify:track:ctx1"],
+            "jellyfin:track:a",
+            &["jellyfin:track:b", "jellyfin:track:ctx1"],
         );
         app.save_session();
 
@@ -16217,7 +15418,7 @@ mod tests {
         let (_, next) = queue_uris(&app);
         assert_eq!(
             next,
-            vec!["spotify:track:b", "spotify:track:ctx1"],
+            vec!["jellyfin:track:b", "jellyfin:track:ctx1"],
             "the queue is shown as it was left"
         );
         assert_eq!(
@@ -16233,22 +15434,22 @@ mod tests {
     fn saving_the_queue_writes_each_song_once_in_order() {
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
         app.queue = loaded_queue(
-            "spotify:track:a",
+            "jellyfin:track:a",
             &[
-                "spotify:track:b",
-                "spotify:track:a",
-                "spotify:track:b",
-                "spotify:track:c",
+                "jellyfin:track:b",
+                "jellyfin:track:a",
+                "jellyfin:track:b",
+                "jellyfin:track:c",
             ],
         );
         assert_eq!(
             app.queue_playlist_uris(),
-            vec!["spotify:track:a", "spotify:track:b", "spotify:track:c"],
+            vec!["jellyfin:track:a", "jellyfin:track:b", "jellyfin:track:c"],
             "the playing song leads and a repeat wrap adds nothing"
         );
     }
@@ -16262,13 +15463,13 @@ mod tests {
             "xyz".into(),
             crate::api::models::Track {
                 id: Some("xyz".into()),
-                uri: "spotify:track:xyz".into(),
+                uri: "jellyfin:track:xyz".into(),
                 name: "Wish You Were Here".into(),
                 ..Default::default()
             },
         );
         app.assumed_context = Some(AssumedContext {
-            uri: "spotify:station:track:xyz".into(),
+            uri: "jellyfin:station:track:xyz".into(),
             shuffle: None,
             at: Instant::now(),
         });
@@ -16288,14 +15489,14 @@ mod tests {
             "xyz".into(),
             crate::api::models::Track {
                 id: Some("xyz".into()),
-                uri: "spotify:track:xyz".into(),
+                uri: "jellyfin:track:xyz".into(),
                 name: title.into(),
                 ..Default::default()
             },
         );
         app.library.playlists = Loadable::Loaded(vec![crate::api::models::Playlist {
             id: "pl9".into(),
-            uri: "spotify:playlist:pl9".into(),
+            uri: "jellyfin:playlist:pl9".into(),
             name: title.into(),
             ..Default::default()
         }]);
@@ -16308,24 +15509,24 @@ mod tests {
             );
             for (uri, expected, page) in [
                 (
-                    "spotify:playlist:pl9",
+                    "jellyfin:playlist:pl9",
                     title.into(),
                     Some(Page::Playlist("pl9".into())),
                 ),
                 (
-                    "spotify:playlist:unloaded",
+                    "jellyfin:playlist:unloaded",
                     gettext(locale, "Playlist").into_owned(),
                     Some(Page::Playlist("unloaded".into())),
                 ),
                 (
-                    "spotify:user:me:collection",
+                    "jellyfin:user:me:collection",
                     gettext(locale, "Liked Songs").into_owned(),
                     Some(Page::LikedSongs),
                 ),
                 (
-                    "spotify:station:track:xyz",
+                    "jellyfin:station:track:xyz",
                     gettext(locale, "{track} Radio").replace("{track}", title),
-                    Some(Page::Radio("spotify:track:xyz".into())),
+                    Some(Page::Radio("jellyfin:track:xyz".into())),
                 ),
             ] {
                 app.assumed_context = Some(AssumedContext {
@@ -16336,7 +15537,7 @@ mod tests {
                 let from = app.playing_from().unwrap();
                 assert_eq!(from.name, expected);
                 assert_eq!(from.page, page);
-                if uri.starts_with("spotify:station:") {
+                if uri.starts_with("jellyfin:station:") {
                     assert_eq!(app.queue_playlist_name(), expected);
                 }
             }
@@ -16364,16 +15565,16 @@ mod tests {
 
         app.library.playlists = Loadable::Loaded(vec![crate::api::models::Playlist {
             id: "pl9".into(),
-            uri: "spotify:playlist:pl9".into(),
+            uri: "jellyfin:playlist:pl9".into(),
             name: "Long Way Home".into(),
             ..Default::default()
         }]);
-        assume(&mut app, "spotify:playlist:pl9");
+        assume(&mut app, "jellyfin:playlist:pl9");
         assert_eq!(
             named(&app),
             ("Long Way Home".into(), Some(Page::Playlist("pl9".into())))
         );
-        assume(&mut app, "spotify:playlist:unloaded");
+        assume(&mut app, "jellyfin:playlist:unloaded");
         assert_eq!(
             named(&app),
             ("Playlist".into(), Some(Page::Playlist("unloaded".into())))
@@ -16384,60 +15585,60 @@ mod tests {
             AlbumPage {
                 album: Loadable::Loaded(crate::api::models::Album {
                     id: "alb1".into(),
-                    uri: "spotify:album:alb1".into(),
+                    uri: "jellyfin:album:alb1".into(),
                     name: "Black Sands".into(),
                     ..Default::default()
                 }),
                 ..Default::default()
             },
         );
-        assume(&mut app, "spotify:album:alb1");
+        assume(&mut app, "jellyfin:album:alb1");
         assert_eq!(
             named(&app),
             ("Black Sands".into(), Some(Page::Album("alb1".into())))
         );
 
-        assume(&mut app, "spotify:user:me:collection");
+        assume(&mut app, "jellyfin:user:me:collection");
         assert_eq!(named(&app), ("Liked Songs".into(), Some(Page::LikedSongs)));
 
         app.track_cache.insert(
             "xyz".into(),
             crate::api::models::Track {
                 id: Some("xyz".into()),
-                uri: "spotify:track:xyz".into(),
+                uri: "jellyfin:track:xyz".into(),
                 name: "Wish You Were Here".into(),
                 ..Default::default()
             },
         );
-        assume(&mut app, "spotify:station:track:xyz");
+        assume(&mut app, "jellyfin:station:track:xyz");
         assert_eq!(
             named(&app),
             (
                 "Wish You Were Here Radio".into(),
-                Some(Page::Radio("spotify:track:xyz".into()))
+                Some(Page::Radio("jellyfin:track:xyz".into()))
             )
         );
-        assume(&mut app, "spotify:station:track:uncached");
+        assume(&mut app, "jellyfin:station:track:uncached");
         assert_eq!(
             named(&app),
             (
                 "Radio".into(),
-                Some(Page::Radio("spotify:track:uncached".into()))
+                Some(Page::Radio("jellyfin:track:uncached".into()))
             )
         );
-        assume(&mut app, "spotify:station:playlist:pl9");
+        assume(&mut app, "jellyfin:station:playlist:pl9");
         assert_eq!(
             named(&app),
             (
                 "Long Way Home Radio".into(),
-                Some(Page::Radio("spotify:playlist:pl9".into()))
+                Some(Page::Radio("jellyfin:playlist:pl9".into()))
             )
         );
     }
 
     /// A replaced window, as when the mini player's taskbar setting
     /// changes, is titled with the playing song again, not left as
-    /// "Spotifast".
+    /// "Jellifast".
     #[test]
     fn a_new_window_is_titled_with_the_playing_song() {
         let ctx = egui::Context::default();
@@ -16454,7 +15655,7 @@ mod tests {
     fn radio_song(id: &str, artist: &str) -> Track {
         Track {
             id: Some(id.into()),
-            uri: format!("spotify:track:{id}"),
+            uri: format!("jellyfin:track:{id}"),
             name: format!("Song {id}"),
             duration_ms: 200_000,
             artists: vec![crate::api::models::ArtistRef {
@@ -16523,20 +15724,20 @@ mod tests {
         app.auth = AuthStatus::Connected {
             username: "test".into(),
         };
-        app.apply(Action::Open(Page::Radio("spotify:track:xyz".into())), &ctx);
-        assert_eq!(app.page(), &Page::Radio("spotify:track:xyz".into()));
+        app.apply(Action::Open(Page::Radio("jellyfin:track:xyz".into())), &ctx);
+        assert_eq!(app.page(), &Page::Radio("jellyfin:track:xyz".into()));
         assert!(matches!(
-            app.radio_pages["spotify:track:xyz"].songs,
+            app.radio_pages["jellyfin:track:xyz"].songs,
             Loadable::Loading
         ));
         assert!(app.queued_play.is_none());
         assert!(app.optimistic_playing.is_none());
         assert!(!app.show_queue_panel);
         assert_eq!(
-            Page::decode(&Page::Radio("spotify:playlist:pl9".into()).encode()),
-            Some(Page::Radio("spotify:playlist:pl9".into()))
+            Page::decode(&Page::Radio("jellyfin:playlist:pl9".into()).encode()),
+            Some(Page::Radio("jellyfin:playlist:pl9".into()))
         );
-        assert_eq!(Page::decode("radio:spotify:show:abc"), None);
+        assert_eq!(Page::decode("radio:jellyfin:show:abc"), None);
     }
 
     /// Spotify mixes a station afresh each time it is asked, so the page's
@@ -16546,7 +15747,7 @@ mod tests {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         crate::theme::install(&ctx);
-        let seed = "spotify:playlist:pl9";
+        let seed = "jellyfin:playlist:pl9";
         for shuffle in [false, true] {
             let mut app = headless_app();
             app.auth = AuthStatus::Connected {
@@ -16561,12 +15762,12 @@ mod tests {
             click_labelled(&ctx, &mut app, seed, "Play");
             assert_eq!(
                 app.queued_play.as_ref().expect("a play request").uris,
-                vec!["spotify:track:a".to_string(), "spotify:track:b".into()],
+                vec!["jellyfin:track:a".to_string(), "jellyfin:track:b".into()],
                 "shuffle {shuffle}: the shown songs play"
             );
             assert_eq!(
                 app.playing_context_uri().as_deref(),
-                Some("spotify:station:playlist:pl9"),
+                Some("jellyfin:station:playlist:pl9"),
                 "the queue names the radio"
             );
             app.backend.shutdown();
@@ -16582,7 +15783,7 @@ mod tests {
         app.auth = AuthStatus::Connected {
             username: "test".into(),
         };
-        let seed = "spotify:album:alb1";
+        let seed = "jellyfin:album:alb1";
         app.apply(Action::Open(Page::Radio(seed.into())), &ctx);
         let first = app.radio_pages[seed].generation;
         app.receive_radio(
@@ -16598,7 +15799,7 @@ mod tests {
         assert!(matches!(app.radio_pages[seed].songs, Loadable::Loading));
         app.receive_radio(seed, second, Ok(vec![radio_song("new", "New")]));
         let songs = app.radio_pages[seed].songs.get().expect("the latest mix");
-        assert_eq!(songs[0].uri, "spotify:track:new");
+        assert_eq!(songs[0].uri, "jellyfin:track:new");
         assert!(app.track_cache.contains_key("new"));
     }
 
@@ -16613,7 +15814,7 @@ mod tests {
         app.auth = AuthStatus::Connected {
             username: "test".into(),
         };
-        let seed = "spotify:artist:art1";
+        let seed = "jellyfin:artist:art1";
         app.apply(Action::Open(Page::Radio(seed.into())), &ctx);
         let generation = app.radio_pages[seed].generation;
         app.receive_radio(seed, generation, Ok(vec![radio_song("old", "Old")]));
@@ -16624,17 +15825,17 @@ mod tests {
                 .uri()
                 .to_string()
         };
-        assert_eq!(rows(&mut app), "spotify:track:old");
+        assert_eq!(rows(&mut app), "jellyfin:track:old");
 
         app.apply(Action::Reload(Page::Radio(seed.into())), &ctx);
         assert!(app.radio_pages[seed].refreshing);
-        assert_eq!(rows(&mut app), "spotify:track:old", "the old mix stays");
+        assert_eq!(rows(&mut app), "jellyfin:track:old", "the old mix stays");
         let asked = app.radio_pages[seed].generation;
         app.receive_radio(seed, asked, Ok(vec![radio_song("new", "New")]));
         assert!(!app.radio_pages[seed].refreshing);
         assert_eq!(
             rows(&mut app),
-            "spotify:track:new",
+            "jellyfin:track:new",
             "the table shows the new mix"
         );
 
@@ -16647,7 +15848,7 @@ mod tests {
         );
         assert_eq!(
             rows(&mut app),
-            "spotify:track:new",
+            "jellyfin:track:new",
             "a failed refresh keeps the songs"
         );
         app.backend.shutdown();
@@ -16665,7 +15866,7 @@ mod tests {
             username: "test".into(),
         };
         app.backend.set_offline(true);
-        let seed = "spotify:track:xyz";
+        let seed = "jellyfin:track:xyz";
         app.track_cache.insert("xyz".into(), {
             let mut seed_song = radio_song("xyz", "Pink Floyd");
             seed_song.name = "Wish You Were Here".into();
@@ -16717,7 +15918,7 @@ mod tests {
                 action,
                 Action::CreatePlaylist { name, public: false, add_uris }
                     if name == "Wish You Were Here Radio"
-                        && add_uris == &["spotify:track:b".to_string(), "spotify:track:a".into()]
+                        && add_uris == &["jellyfin:track:b".to_string(), "jellyfin:track:a".into()]
             )),
             "{:?}",
             app.actions
@@ -16731,7 +15932,7 @@ mod tests {
     fn the_milkdrop_window_drives_playback() {
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
@@ -16759,7 +15960,7 @@ mod tests {
         app.milkdrop_command("save-toggle");
         assert!(matches!(
             app.actions.first(),
-            Some(Action::ToggleSaved(uri)) if uri == "spotify:track:a"
+            Some(Action::ToggleSaved(uri)) if uri == "jellyfin:track:a"
         ));
         app.actions.clear();
         app.milkdrop_command("next");
@@ -16808,7 +16009,7 @@ mod tests {
         assert!(!app.window_hidden, "a window this app still owns");
 
         // #when something asks for the window: the Dock, the tray, or
-        // `spotifast show`
+        // `jellifast show`
         let mut output = ctx.run_ui(Default::default(), |ui| {
             app.apply(Action::ShowWindow, ui.ctx());
         });
@@ -16944,7 +16145,7 @@ mod tests {
         let ctx = egui::Context::default();
         assert!(!app.thumb_state(true).has_track);
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:thumbnail".into(),
+            uri: "jellyfin:track:thumbnail".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
@@ -16974,7 +16175,7 @@ mod tests {
         assert!(!app.switch_intent, "settings do not close the main window");
         app.settings.winamp_window = true;
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:continues".into(),
+            uri: "jellyfin:track:continues".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
@@ -16993,7 +16194,7 @@ mod tests {
         assert_eq!(app.local.playback, Playback::Playing);
         assert_eq!(
             app.local.track.as_ref().unwrap().uri,
-            "spotify:track:continues"
+            "jellyfin:track:continues"
         );
         app.switch_intent = false;
         let mut output = ctx.run_ui(egui::RawInput::default(), |_ui| {
@@ -17266,7 +16467,7 @@ mod tests {
 
     fn headless_app() -> App {
         let root =
-            std::env::temp_dir().join(format!("spotifast-volume-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-volume-test-{}", std::process::id()));
         let dirs = AppDirs {
             config: root.join("config"),
             state: root.join("state"),
@@ -17330,7 +16531,7 @@ mod tests {
     fn optimistic_local_seek_holds_position_until_player_confirms_seek() {
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:test1234".into(),
+            uri: "jellyfin:track:test1234".into(),
             title: "Test Track".into(),
             duration_ms: 180_000,
             ..Default::default()
@@ -17373,7 +16574,7 @@ mod tests {
             id.to_string(),
             Track {
                 id: Some(id.to_string()),
-                uri: format!("spotify:track:{id}"),
+                uri: format!("jellyfin:track:{id}"),
                 ..Track::default()
             },
         );
@@ -17390,143 +16591,11 @@ mod tests {
     }
 
     #[test]
-    fn precise_album_types_are_requested_only_for_web_singles_and_once_per_uri() {
-        use crate::api::models::{Page as ApiPage, SavedAlbum};
-
-        let mut app = headless_app();
-        app.backend.set_offline(true);
-        let first = web_album("spotify:album:first", "single", Some("single"));
-        let second = web_album("spotify:album:second", "single", Some("single"));
-        let detail = web_album("spotify:album:detail", "single", None);
-        let album = web_album("spotify:album:album", "album", Some("album"));
-        let compilation = web_album(
-            "spotify:album:compilation",
-            "compilation",
-            Some("compilation"),
-        );
-        let appears_on = web_album("spotify:album:appears", "single", Some("appears_on"));
-
-        app.handle_api(ApiResponse::SavedAlbums {
-            offset: 0,
-            result: Ok(ApiPage {
-                items: vec![
-                    SavedAlbum {
-                        album: first.clone(),
-                        ..SavedAlbum::default()
-                    },
-                    SavedAlbum {
-                        album: compilation,
-                        ..SavedAlbum::default()
-                    },
-                    SavedAlbum {
-                        album,
-                        ..SavedAlbum::default()
-                    },
-                ],
-                ..ApiPage::default()
-            }),
-        });
-        assert_eq!(
-            app.backend.take_album_type_requests(),
-            vec![vec![first.uri.clone()]]
-        );
-
-        app.artist_pages
-            .insert("artist".into(), ArtistPage::default());
-        app.handle_api(ApiResponse::ArtistAlbums {
-            id: "artist".into(),
-            groups: "album,single,compilation,appears_on".into(),
-            offset: 0,
-            result: Ok(ApiPage {
-                items: vec![first, second.clone(), appears_on],
-                ..ApiPage::default()
-            }),
-        });
-        assert_eq!(
-            app.backend.take_album_type_requests(),
-            vec![vec![second.uri.clone()]]
-        );
-
-        app.album_pages
-            .insert(detail.id.clone(), AlbumPage::default());
-        app.handle_api(ApiResponse::Album {
-            id: detail.id.clone(),
-            result: Ok(detail.clone()),
-        });
-        assert_eq!(
-            app.backend.take_album_type_requests(),
-            vec![vec![detail.uri.clone()]]
-        );
-
-        app.handle_api(ApiResponse::Album {
-            id: detail.id.clone(),
-            result: Ok(detail),
-        });
-        assert!(app.backend.take_album_type_requests().is_empty());
-    }
-
-    #[test]
-    fn precise_ep_confirmation_preserves_fallback_and_web_kind_precedence() {
-        let mut app = headless_app();
-        app.backend.set_offline(true);
-        let ep = web_album("spotify:album:ep", "single", Some("single"));
-        let failed = web_album("spotify:album:failed", "single", Some("single"));
-        let timed_out = web_album("spotify:album:timeout", "single", Some("single"));
-        let regular = web_album("spotify:album:regular", "single", Some("single"));
-
-        app.request_album_types([&ep, &failed, &timed_out, &regular]);
-        let _ = app.backend.take_album_type_requests();
-        app.handle_backend_events(vec![
-            Event::AlbumType {
-                uri: ep.uri.clone(),
-                result: Ok(true),
-            },
-            Event::AlbumType {
-                uri: failed.uri.clone(),
-                result: Err("unavailable".into()),
-            },
-            Event::AlbumType {
-                uri: timed_out.uri.clone(),
-                result: Err("album metadata timed out".into()),
-            },
-            Event::AlbumType {
-                uri: regular.uri.clone(),
-                result: Ok(false),
-            },
-        ]);
-
-        assert_eq!(app.album_kind_label(&ep), "EP");
-        assert_eq!(app.album_kind_label(&failed), "Single");
-        assert_eq!(app.album_kind_label(&timed_out), "Single");
-        assert_eq!(app.album_kind_label(&regular), "Single");
-        let appears_on = web_album(&ep.uri, "single", Some("appears_on"));
-        let compilation = web_album(&ep.uri, "single", Some("compilation"));
-        let album = web_album(&ep.uri, "single", Some("album"));
-        assert_eq!(app.album_kind_label(&appears_on), "Appears On");
-        assert_eq!(app.album_kind_label(&compilation), "Compilation");
-        assert_eq!(app.album_kind_label(&album), "Album");
-
-        app.request_album_types([&failed, &timed_out]);
-        assert!(
-            app.backend.take_album_type_requests().is_empty(),
-            "failed lookups are terminal for this session"
-        );
-
-        app.handle_auth(AuthStatus::SignedOut);
-        assert_eq!(app.album_kind_label(&ep), "Single");
-        app.handle_auth(AuthStatus::Connected {
-            username: "next-session".into(),
-        });
-        app.request_album_types([&ep]);
-        assert_eq!(app.backend.take_album_type_requests(), vec![vec![ep.uri]]);
-    }
-
-    #[test]
     fn two_toggle_play_actions_in_one_batch_return_to_playing() {
         let mut app = headless_app();
         let ctx = egui::Context::default();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             title: "A".into(),
             ..Default::default()
         });
@@ -17577,7 +16646,7 @@ mod tests {
                     ..Default::default()
                 }),
                 items: PagedList {
-                    items: vec![cached_playlist_row("spotify:track:first")],
+                    items: vec![cached_playlist_row("jellyfin:track:first")],
                     total: Some(1),
                     next_offset: None,
                     loaded_once: true,
@@ -17588,7 +16657,7 @@ mod tests {
             },
         );
         app.open(Page::Playlist("edited".into()));
-        for uri in ["spotify:track:second", "spotify:track:third"] {
+        for uri in ["jellyfin:track:second", "jellyfin:track:third"] {
             app.apply(
                 Action::ConfirmAddToPlaylist {
                     position: None,
@@ -17613,9 +16682,9 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         let expected = [
-            "spotify:track:first",
-            "spotify:track:second",
-            "spotify:track:third",
+            "jellyfin:track:first",
+            "jellyfin:track:second",
+            "jellyfin:track:third",
         ];
         assert_eq!(rows(&app), expected);
         app.handle_api(ApiResponse::PlaylistItemsChanged {
@@ -17682,7 +16751,7 @@ mod tests {
                     connected: true,
                     playback: Playback::Stopped,
                     track: Some(crate::player::LocalTrack {
-                        uri: "spotify:track:bellaire".into(),
+                        uri: "jellyfin:track:bellaire".into(),
                         ..Default::default()
                     }),
                     track_sequence: 3,
@@ -17693,7 +16762,7 @@ mod tests {
                     state: PlaybackState {
                         is_playing: playing,
                         progress_ms: Some(65_000),
-                        item: Some(queued_song("spotify:track:metallica")),
+                        item: Some(queued_song("jellyfin:track:metallica")),
                         device: Some(crate::api::models::Device {
                             id: Some("phone".into()),
                             is_active: true,
@@ -17705,16 +16774,16 @@ mod tests {
                 });
                 app.on_now_playing_changed();
                 let upcoming = [
-                    "spotify:track:metallica",
-                    "spotify:track:extra",
-                    "spotify:track:context",
+                    "jellyfin:track:metallica",
+                    "jellyfin:track:extra",
+                    "jellyfin:track:context",
                 ];
-                app.queue = loaded_queue("spotify:track:metallica", &upcoming);
+                app.queue = loaded_queue("jellyfin:track:metallica", &upcoming);
                 app.manual_queue = upcoming[..2].iter().map(|uri| uri.to_string()).collect();
                 // Old local restoration data must not be appended to the transfer.
-                app.resume_track = Some("spotify:track:metallica".into());
-                app.resume_queue = vec!["spotify:track:old-queue".into()];
-                app.local_list = Some(vec!["spotify:track:bellaire".into()]);
+                app.resume_track = Some("jellyfin:track:metallica".into());
+                app.resume_queue = vec!["jellyfin:track:old-queue".into()];
+                app.local_list = Some(vec!["jellyfin:track:bellaire".into()]);
                 match snapshot {
                     "stale" => {
                         app.remote.as_mut().unwrap().received_at = Instant::now() - REMOTE_FRESH
@@ -17740,7 +16809,7 @@ mod tests {
                 };
                 app.handle_local(loading);
                 if snapshot == "fresh" {
-                    assert_eq!(app.now_playing().unwrap().uri, "spotify:track:metallica");
+                    assert_eq!(app.now_playing().unwrap().uri, "jellyfin:track:metallica");
                 }
                 assert_eq!(queue_uris(&app).1, upcoming);
 
@@ -17752,7 +16821,7 @@ mod tests {
                         Playback::Paused
                     },
                     track: Some(crate::player::LocalTrack {
-                        uri: "spotify:track:metallica".into(),
+                        uri: "jellyfin:track:metallica".into(),
                         duration_ms: 300_000,
                         ..Default::default()
                     }),
@@ -17762,7 +16831,7 @@ mod tests {
                 };
                 app.handle_local(transferred.clone());
                 let now = app.now_playing().unwrap();
-                assert_eq!(now.uri, "spotify:track:metallica");
+                assert_eq!(now.uri, "jellyfin:track:metallica");
                 assert_eq!(now.position_ms, 65_000);
                 assert_eq!(now.playing, playing);
                 assert_eq!(app.target(), Target::Local);
@@ -17781,7 +16850,7 @@ mod tests {
                     ..transferred
                 });
                 assert_eq!(queue_uris(&app).1, upcoming[1..]);
-                assert_eq!(app.manual_queue, ["spotify:track:extra"]);
+                assert_eq!(app.manual_queue, ["jellyfin:track:extra"]);
                 app.backend.shutdown();
             }
         }
@@ -17791,13 +16860,16 @@ mod tests {
     fn a_frame_snapshot_does_not_freeze_local_after_remote_handoff() {
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:local".into(),
+            uri: "jellyfin:track:local".into(),
             title: "Local".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
         app.refresh_frame_now();
-        assert_eq!(app.now_playing().expect("local").uri, "spotify:track:local");
+        assert_eq!(
+            app.now_playing().expect("local").uri,
+            "jellyfin:track:local"
+        );
         app.local.track = None;
         app.local.playback = Playback::Stopped;
         app.remote = Some(RemoteSnapshot {
@@ -17805,7 +16877,7 @@ mod tests {
                 is_playing: true,
                 item: Some(PlayableItem::Track(Track {
                     id: Some("remote".into()),
-                    uri: "spotify:track:remote".into(),
+                    uri: "jellyfin:track:remote".into(),
                     name: "Remote".into(),
                     ..Track::default()
                 })),
@@ -17815,12 +16887,12 @@ mod tests {
         });
         assert_eq!(
             app.now_playing().expect("stale snapshot").uri,
-            "spotify:track:local"
+            "jellyfin:track:local"
         );
         app.refresh_frame_now();
         assert_eq!(
             app.now_playing().expect("handoff").uri,
-            "spotify:track:remote"
+            "jellyfin:track:remote"
         );
     }
 
@@ -17874,7 +16946,7 @@ mod tests {
     fn logic_pass_alone_schedules_the_next_one_while_playing() {
         let mut app = headless_app();
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Playing;
@@ -17910,7 +16982,7 @@ mod tests {
         let mut app = headless_app();
         assert_eq!(app.connected_repaint_interval(), REMOTE_POLL_ACTIVE);
         app.local.track = Some(crate::player::LocalTrack {
-            uri: "spotify:track:a".into(),
+            uri: "jellyfin:track:a".into(),
             ..Default::default()
         });
         app.local.playback = Playback::Paused;
@@ -17928,7 +17000,7 @@ mod tests {
             vec![(
                 PlayableItem::Track(Track {
                     name: "Hold".into(),
-                    uri: "spotify:track:hold".into(),
+                    uri: "jellyfin:track:hold".into(),
                     ..Track::default()
                 }),
                 None,
@@ -17942,7 +17014,7 @@ mod tests {
             vec![(
                 PlayableItem::Track(Track {
                     name: "Fresh".into(),
-                    uri: "spotify:track:fresh".into(),
+                    uri: "jellyfin:track:fresh".into(),
                     ..Track::default()
                 }),
                 None,
@@ -18012,16 +17084,16 @@ mod tests {
             "pl1".into(),
             PlaylistPage {
                 items: PagedList {
-                    items: vec![row("spotify:track:one"), row("spotify:track:two")],
+                    items: vec![row("jellyfin:track:one"), row("jellyfin:track:two")],
                     ..Default::default()
                 },
                 ..Default::default()
             },
         );
-        app.resume_context = Some("spotify:playlist:pl1".into());
-        app.resume_track = Some("spotify:track:one".into());
+        app.resume_context = Some("jellyfin:playlist:pl1".into());
+        app.resume_track = Some("jellyfin:track:one".into());
         app.apply(Action::Next, &ctx);
-        assert_eq!(app.resume_track.as_deref(), Some("spotify:track:two"));
+        assert_eq!(app.resume_track.as_deref(), Some("jellyfin:track:two"));
         store_track(&mut app, "overflow");
         let _ = app.read_cached_track("overflow");
         app.evict_stale_pages();
@@ -18044,7 +17116,7 @@ mod tests {
             store_track(&mut app, &format!("old{i}"));
             let _ = app.read_cached_track(&format!("old{i}"));
         }
-        app.resume_track = Some("spotify:track:resume".into());
+        app.resume_track = Some("jellyfin:track:resume".into());
         app.request_resume_track();
         store_track(&mut app, "overflow");
         let _ = app.read_cached_track("overflow");
@@ -18075,7 +17147,7 @@ mod tests {
                 vec![(
                     PlayableItem::Track(Track {
                         name: "Old".into(),
-                        uri: "spotify:track:old".into(),
+                        uri: "jellyfin:track:old".into(),
                         ..Track::default()
                     }),
                     None,
@@ -18103,7 +17175,7 @@ mod tests {
                 manual,
                 result: Ok(Some(crate::updates::Release {
                     version: "1.2.3".into(),
-                    url: "https://github.com/crmne/spotifast/releases/tag/v1.2.3".into(),
+                    url: "https://github.com/j4ckxyz/jellifast/releases/tag/v1.2.3".into(),
                 })),
             }]);
             let ctx = egui::Context::default();
@@ -18120,7 +17192,7 @@ mod tests {
         let mut app = headless_app();
         app.update = Some(crate::updates::Release {
             version: "1.2.3".into(),
-            url: "https://github.com/crmne/spotifast/releases/tag/v1.2.3".into(),
+            url: "https://github.com/j4ckxyz/jellifast/releases/tag/v1.2.3".into(),
         });
         app.update_checking = true;
         app.handle_backend_events(vec![Event::UpdateChecked {
@@ -18132,7 +17204,7 @@ mod tests {
         assert_eq!(app.update, None);
         assert_eq!(
             app.toasts.last().map(|toast| toast.message.as_str()),
-            Some("Spotifast is up to date")
+            Some("Jellifast is up to date")
         );
 
         app.toasts.clear();
@@ -18171,7 +17243,7 @@ mod tests {
             manual: false,
             result: Ok(Some(crate::updates::Release {
                 version: "1.2.3".into(),
-                url: "https://github.com/crmne/spotifast/releases/tag/v1.2.3".into(),
+                url: "https://github.com/j4ckxyz/jellifast/releases/tag/v1.2.3".into(),
             })),
         }]);
 
@@ -18181,7 +17253,7 @@ mod tests {
         );
         assert_eq!(
             app.toasts.last().map(|toast| toast.message.as_str()),
-            Some("Spotifast 1.2.3 is available")
+            Some("Jellifast 1.2.3 is available")
         );
     }
 
@@ -18204,7 +17276,7 @@ mod tests {
             PlaylistPage {
                 items: PagedList {
                     items: vec![
-                        cached_playlist_row("spotify:track:first"),
+                        cached_playlist_row("jellyfin:track:first"),
                         Default::default(),
                     ],
                     total: Some(100),
@@ -18241,7 +17313,7 @@ mod tests {
             generation: 0,
             result: Ok(crate::api::models::Page {
                 items: vec![
-                    cached_playlist_row("spotify:track:second"),
+                    cached_playlist_row("jellyfin:track:second"),
                     Default::default(),
                 ],
                 total: 100,
@@ -18255,7 +17327,7 @@ mod tests {
         assert_eq!(Arc::as_ptr(&positions), old_positions);
         assert_eq!(positions.as_slice(), [0, 2]);
         assert_eq!(rows.len(), 2);
-        assert_eq!(rows[1].0.uri(), "spotify:track:second");
+        assert_eq!(rows[1].0.uri(), "jellyfin:track:second");
     }
 
     #[test]
@@ -18266,7 +17338,7 @@ mod tests {
             "rows".into(),
             PlaylistPage {
                 items: PagedList {
-                    items: vec![cached_playlist_row("spotify:track:first")],
+                    items: vec![cached_playlist_row("jellyfin:track:first")],
                     total: Some(100),
                     next_offset: Some(1),
                     loaded_once: true,
@@ -18300,11 +17372,11 @@ mod tests {
         let page = app.playlist_pages.get_mut("rows").unwrap();
         page.items
             .items
-            .insert(0, cached_playlist_row("spotify:track:added"));
+            .insert(0, cached_playlist_row("jellyfin:track:added"));
         page.items.revision += 1;
         let (rows, positions, _) = cached(&mut app, "renamed owner");
         assert_ne!(Arc::as_ptr(&rows), first);
-        assert_eq!(rows[0].0.uri(), "spotify:track:added");
+        assert_eq!(rows[0].0.uri(), "jellyfin:track:added");
         assert_eq!(positions.as_slice(), [0, 1]);
         drop(rows);
         drop(positions);
@@ -18314,7 +17386,7 @@ mod tests {
             offset: 0,
             generation: 0,
             result: Ok(crate::api::models::Page {
-                items: vec![cached_playlist_row("spotify:track:refreshed")],
+                items: vec![cached_playlist_row("jellyfin:track:refreshed")],
                 total: 100,
                 limit: 1,
                 offset: 0,
@@ -18323,7 +17395,7 @@ mod tests {
         });
         let (rows, positions, _) = cached(&mut app, "renamed owner");
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].0.uri(), "spotify:track:refreshed");
+        assert_eq!(rows[0].0.uri(), "jellyfin:track:refreshed");
         assert_eq!(positions.as_slice(), [0]);
         drop(rows);
         drop(positions);
@@ -18338,7 +17410,7 @@ mod tests {
             offset: 50,
             generation: 0,
             result: Ok(crate::api::models::Page {
-                items: vec![cached_playlist_row("spotify:track:window")],
+                items: vec![cached_playlist_row("jellyfin:track:window")],
                 total: 100,
                 limit: 1,
                 offset: 50,
@@ -18347,7 +17419,7 @@ mod tests {
         });
         let (rows, positions, _) = cached(&mut app, "renamed owner");
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].0.uri(), "spotify:track:window");
+        assert_eq!(rows[0].0.uri(), "jellyfin:track:window");
         assert_eq!(positions.as_slice(), [0]);
     }
 
@@ -18375,7 +17447,7 @@ mod tests {
                     ..Default::default()
                 }),
                 items: PagedList {
-                    items: vec![cached_playlist_row("spotify:track:held")],
+                    items: vec![cached_playlist_row("jellyfin:track:held")],
                     total: Some(1),
                     next_offset: None,
                     loaded_once: true,
@@ -18415,7 +17487,7 @@ mod tests {
     fn a_known_duplicate_opens_the_dialog_without_a_spotify_scan() {
         let mut app = headless_app();
         app.backend.set_offline(true);
-        let honey = cached_playlist_row("spotify:track:honey");
+        let honey = cached_playlist_row("jellyfin:track:honey");
         app.playlist_pages.insert(
             "best".into(),
             PlaylistPage {
@@ -18445,7 +17517,7 @@ mod tests {
             Some(Dialog::ConfirmPlaylistDuplicates {
                 ref duplicate_uris,
                 ..
-            }) if duplicate_uris == &["spotify:track:honey"]
+            }) if duplicate_uris == &["jellyfin:track:honey"]
         ));
     }
 
@@ -18475,7 +17547,7 @@ mod tests {
                     ..Default::default()
                 }),
                 items: PagedList {
-                    items: vec![cached_playlist_row("spotify:track:one")],
+                    items: vec![cached_playlist_row("jellyfin:track:one")],
                     total: Some(1),
                     next_offset: None,
                     loaded_once: true,
@@ -18486,7 +17558,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let added = cached_playlist_row("spotify:track:honey")
+        let added = cached_playlist_row("jellyfin:track:honey")
             .playable()
             .unwrap()
             .clone();
@@ -18507,10 +17579,10 @@ mod tests {
         assert_eq!(page.items.next_offset, None);
         assert_eq!(
             page.items.items[0].playable().map(PlayableItem::uri),
-            Some("spotify:track:one"),
+            Some("jellyfin:track:one"),
             "the held rows are not discarded"
         );
-        assert!(page.local_additions.contains("spotify:track:honey"));
+        assert!(page.local_additions.contains("jellyfin:track:honey"));
         assert_eq!(page.cache_saved_through, None);
 
         app.handle_api(ApiResponse::PlaylistItemsChanged {
@@ -18555,7 +17627,7 @@ mod tests {
                     ..Default::default()
                 }),
                 items: PagedList {
-                    items: vec![cached_playlist_row("spotify:track:one")],
+                    items: vec![cached_playlist_row("jellyfin:track:one")],
                     total: Some(1),
                     next_offset: None,
                     loaded_once: true,
@@ -18575,7 +17647,7 @@ mod tests {
             Some("old")
         );
 
-        let added = cached_playlist_row("spotify:track:honey")
+        let added = cached_playlist_row("jellyfin:track:honey")
             .playable()
             .unwrap()
             .clone();
@@ -18636,8 +17708,8 @@ mod tests {
                     items: PagedList {
                         base_offset: base,
                         items: vec![
-                            cached_playlist_row("spotify:track:a"),
-                            cached_playlist_row("spotify:track:b"),
+                            cached_playlist_row("jellyfin:track:a"),
+                            cached_playlist_row("jellyfin:track:b"),
                         ],
                         total: Some(200),
                         next_offset: Some(base + 2),
@@ -18647,7 +17719,7 @@ mod tests {
                     ..Default::default()
                 },
             );
-            let item = cached_playlist_row("spotify:track:new")
+            let item = cached_playlist_row("jellyfin:track:new")
                 .playable()
                 .unwrap()
                 .clone();
@@ -18689,7 +17761,7 @@ mod tests {
                         .playable()
                         .unwrap()
                         .uri(),
-                    "spotify:track:new"
+                    "jellyfin:track:new"
                 );
             } else {
                 assert_eq!(page.items.items.len(), 2);
@@ -18709,7 +17781,7 @@ mod tests {
                 offset: base,
                 generation: 9,
                 result: Ok(crate::api::models::Page {
-                    items: vec![cached_playlist_row("spotify:track:old")],
+                    items: vec![cached_playlist_row("jellyfin:track:old")],
                     total: 200,
                     ..Default::default()
                 }),
@@ -18749,8 +17821,8 @@ mod tests {
             PlaylistPage {
                 items: PagedList {
                     items: vec![
-                        cached_playlist_row("spotify:track:a"),
-                        cached_playlist_row("spotify:track:b"),
+                        cached_playlist_row("jellyfin:track:a"),
+                        cached_playlist_row("jellyfin:track:b"),
                     ],
                     total: Some(2),
                     next_offset: None,
@@ -18760,7 +17832,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let item = cached_playlist_row("spotify:track:b")
+        let item = cached_playlist_row("jellyfin:track:b")
             .playable()
             .unwrap()
             .clone();
@@ -18801,7 +17873,7 @@ mod tests {
                 .iter()
                 .map(|row| row.playable().unwrap().uri())
                 .collect::<Vec<_>>(),
-            ["spotify:track:b", "spotify:track:a", "spotify:track:b"]
+            ["jellyfin:track:b", "jellyfin:track:a", "jellyfin:track:b"]
         );
         assert!(matches!(
             app.backend.take_playlist_add_requests().as_slice(),
@@ -18831,7 +17903,7 @@ mod tests {
                     ..Default::default()
                 }),
                 items: PagedList {
-                    items: vec![cached_playlist_row("spotify:track:old")],
+                    items: vec![cached_playlist_row("jellyfin:track:old")],
                     total: Some(1),
                     next_offset: None,
                     loaded_once: true,
@@ -18842,7 +17914,7 @@ mod tests {
         );
         let track = |id: &str| Track {
             id: Some(id.into()),
-            uri: format!("spotify:track:{id}"),
+            uri: format!("jellyfin:track:{id}"),
             name: format!("Song {id}"),
             ..Default::default()
         };
@@ -18869,11 +17941,11 @@ mod tests {
                 .platform_output
                 .commands
                 .contains(&egui::OutputCommand::CopyText(
-                    [
-                        "https://open.spotify.com/track/aaa",
-                        "https://open.spotify.com/track/bbb"
-                    ]
-                    .join(if cfg!(windows) { "\r\n" } else { "\n" })
+                    ["jellyfin:track:aaa", "jellyfin:track:bbb"].join(if cfg!(windows) {
+                        "\r\n"
+                    } else {
+                        "\n"
+                    })
                 ))
         );
 
@@ -18881,7 +17953,7 @@ mod tests {
         app.apply(
             Action::PasteSongs {
                 playlist_id: "target".into(),
-                text: "https://open.spotify.com/track/aaa?si=x\r\nspotify:track:bbb\n".into(),
+                text: "jellifast://track/aaa?si=x\r\njellyfin:track:bbb\n".into(),
             },
             &ctx,
         );
@@ -18891,7 +17963,7 @@ mod tests {
         assert!(matches!(
             app.backend.take_playlist_add_requests().as_slice(),
             [ApiRequest::AddToPlaylist { uris, position: None, .. }]
-                if uris == &["spotify:track:aaa", "spotify:track:bbb"]
+                if uris == &["jellyfin:track:aaa", "jellyfin:track:bbb"]
         ));
         app.handle_api(ApiResponse::PlaylistItemsChanged {
             id: "target".into(),
@@ -18903,8 +17975,7 @@ mod tests {
         app.apply(
             Action::PasteSongs {
                 playlist_id: "target".into(),
-                text: "spotify:track:ccc https://open.spotify.com/album/xyz, spotify:track:ddd"
-                    .into(),
+                text: "jellyfin:track:ccc jellifast://album/xyz, jellyfin:track:ddd".into(),
             },
             &ctx,
         );
@@ -18933,7 +18004,7 @@ mod tests {
         assert_eq!(rows(&app), ["", "Song aaa", "Song bbb", "Song ccc"]);
         assert!(matches!(
             app.backend.take_playlist_add_requests().as_slice(),
-            [ApiRequest::AddToPlaylist { uris, .. }] if uris == &["spotify:track:ccc"]
+            [ApiRequest::AddToPlaylist { uris, .. }] if uris == &["jellyfin:track:ccc"]
         ));
         assert!(
             app.toasts
@@ -18956,7 +18027,7 @@ mod tests {
         assert!(
             app.toasts
                 .iter()
-                .any(|toast| toast.message == "The clipboard has no Spotify song links")
+                .any(|toast| toast.message == "The clipboard has no song links")
         );
 
         // #when the playlist cannot be edited
@@ -18968,7 +18039,7 @@ mod tests {
         app.apply(
             Action::PasteSongs {
                 playlist_id: "target".into(),
-                text: "spotify:track:aaa".into(),
+                text: "jellyfin:track:aaa".into(),
             },
             &ctx,
         );
@@ -18988,7 +18059,7 @@ mod tests {
             "target".into(),
             "Target".into(),
             vec![
-                cached_playlist_row("spotify:track:new")
+                cached_playlist_row("jellyfin:track:new")
                     .playable()
                     .unwrap()
                     .clone(),
@@ -19011,7 +18082,7 @@ mod tests {
             "best".into(),
             PlaylistPage {
                 items: PagedList {
-                    items: vec![cached_playlist_row("spotify:track:first")],
+                    items: vec![cached_playlist_row("jellyfin:track:first")],
                     total: Some(1),
                     loaded_once: true,
                     ..Default::default()
@@ -19106,7 +18177,7 @@ mod tests {
                     ..Default::default()
                 }),
                 items: PagedList {
-                    items: vec![cached_playlist_row("spotify:track:first")],
+                    items: vec![cached_playlist_row("jellyfin:track:first")],
                     total: Some(1),
                     loaded_once: true,
                     ..Default::default()
@@ -19114,7 +18185,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        for uri in ["spotify:track:second", "spotify:track:third"] {
+        for uri in ["jellyfin:track:second", "jellyfin:track:third"] {
             app.add_to_playlist_now(
                 "edited".into(),
                 "Edited".into(),
@@ -19173,14 +18244,14 @@ mod tests {
                 ..Default::default()
             }),
         };
-        app.handle_api(rows(generation, &["spotify:track:first"]));
+        app.handle_api(rows(generation, &["jellyfin:track:first"]));
         assert_eq!(app.playlist_pages["edited"].items.items.len(), 3);
         assert!(app.playlist_pages["edited"].items.loading);
         let expected = [
-            "spotify:track:first",
-            "spotify:track:second",
-            "spotify:track:third",
-            "spotify:track:added-elsewhere",
+            "jellyfin:track:first",
+            "jellyfin:track:second",
+            "jellyfin:track:third",
+            "jellyfin:track:added-elsewhere",
         ];
         app.handle_api(rows(refreshed_generation, &expected));
         let page = &app.playlist_pages["edited"];
@@ -19207,7 +18278,7 @@ mod tests {
                     items: PagedList {
                         items: (0..50)
                             .map(|index| {
-                                cached_playlist_row(&format!("spotify:track:edited_{index}"))
+                                cached_playlist_row(&format!("jellyfin:track:edited_{index}"))
                             })
                             .collect(),
                         total: Some(1_000),
@@ -19230,7 +18301,7 @@ mod tests {
                 assert_eq!(rows.items.len(), 50);
                 assert_eq!(
                     rows.items[0].playable().unwrap().uri(),
-                    "spotify:track:edited_0"
+                    "jellyfin:track:edited_0"
                 );
                 assert!(!rows.loading);
             } else {
@@ -19267,13 +18338,13 @@ mod tests {
                         ..Default::default()
                     }),
                     items: PagedList {
-                        items: vec![cached_playlist_row("spotify:track:new")],
+                        items: vec![cached_playlist_row("jellyfin:track:new")],
                         total: Some(1),
                         loaded_once: true,
                         ..Default::default()
                     },
                     optimistic_snapshot: Some("written".into()),
-                    local_additions: ["spotify:track:new".into()].into(),
+                    local_additions: ["jellyfin:track:new".into()].into(),
                     ..Default::default()
                 },
             );
@@ -19306,7 +18377,7 @@ mod tests {
             assert!(!page.items.loading, "failed refresh must stop spinning");
             assert!(page.items.error.is_some());
             assert_eq!(page.items.items.len(), 1);
-            assert!(page.local_additions.contains("spotify:track:new"));
+            assert!(page.local_additions.contains("jellyfin:track:new"));
             assert_eq!(page.optimistic_snapshot.as_deref(), Some("written"));
             app.load_more(Page::Playlist("edited".into()));
             assert!(app.backend.take_playlist_item_requests().is_empty());
@@ -19344,8 +18415,8 @@ mod tests {
                 }),
                 items: PagedList {
                     items: vec![
-                        cached_playlist_row("spotify:track:one"),
-                        cached_playlist_row("spotify:track:honey"),
+                        cached_playlist_row("jellyfin:track:one"),
+                        cached_playlist_row("jellyfin:track:honey"),
                     ],
                     total: Some(2),
                     next_offset: None,
@@ -19410,8 +18481,8 @@ mod tests {
             },
             ..Default::default()
         };
-        let saved_uri = "spotify:track:original";
-        let playing_uri = "spotify:track:playable";
+        let saved_uri = "jellyfin:track:original";
+        let playing_uri = "jellyfin:track:playable";
 
         app.remember_track_recording(&recording(saved_uri));
         app.set_saved_state(saved_uri.into(), true);
@@ -19425,7 +18496,7 @@ mod tests {
     fn a_stale_contains_answer_does_not_undo_a_liked_song() {
         let mut app = headless_app();
         app.backend.set_offline(true);
-        let uri = "spotify:track:honey";
+        let uri = "jellyfin:track:honey";
         app.apply(Action::ToggleSaved(uri.into()), &egui::Context::default());
         assert_eq!(app.is_saved(uri), Some(true));
 
@@ -19452,12 +18523,12 @@ mod tests {
             playlist_id: "mix".into(),
             playlist_name: "Night mix".into(),
             items: vec![
-                cached_playlist_row("spotify:track:again")
+                cached_playlist_row("jellyfin:track:again")
                     .playable()
                     .unwrap()
                     .clone(),
             ],
-            result: Ok(vec!["spotify:track:again".into()]),
+            result: Ok(vec!["jellyfin:track:again".into()]),
         });
 
         assert!(!app.playlist_busy, "the confirmation is interactive");
@@ -19476,7 +18547,7 @@ mod tests {
                 playlist_id: "mix".into(),
                 playlist_name: "Night mix".into(),
                 items: vec![
-                    cached_playlist_row("spotify:track:again")
+                    cached_playlist_row("jellyfin:track:again")
                         .playable()
                         .unwrap()
                         .clone(),
@@ -19500,7 +18571,7 @@ mod tests {
             playlist_id: "mix".into(),
             playlist_name: "Night mix".into(),
             items: vec![
-                cached_playlist_row("spotify:track:new")
+                cached_playlist_row("jellyfin:track:new")
                     .playable()
                     .unwrap()
                     .clone(),
@@ -19535,7 +18606,7 @@ mod tests {
             };
             let cache = Some(PlaylistCache {
                 snapshot: "same-revision".into(),
-                items: vec![cached_playlist_row("spotify:track:wrong"); 4],
+                items: vec![cached_playlist_row("jellyfin:track:wrong"); 4],
                 total: 4,
                 next_offset: None,
                 appendable: false,
@@ -19557,7 +18628,7 @@ mod tests {
                 offset: 0,
                 generation: 0,
                 result: Ok(crate::api::models::Page {
-                    items: vec![cached_playlist_row("spotify:track:right"); 3],
+                    items: vec![cached_playlist_row("jellyfin:track:right"); 3],
                     total: 3,
                     limit: 50,
                     ..Default::default()
@@ -19565,7 +18636,7 @@ mod tests {
             });
             assert_eq!(
                 app.playlist_start("mix"),
-                (Some("spotify:track:right".into()), None)
+                (Some("jellyfin:track:right".into()), None)
             );
             assert_eq!(app.playlist_pages["mix"].items.items.len(), 3);
         }
@@ -19589,7 +18660,7 @@ mod tests {
                     ..Default::default()
                 }),
                 items: PagedList {
-                    items: vec![cached_playlist_row("spotify:track:shown"); 2],
+                    items: vec![cached_playlist_row("jellyfin:track:shown"); 2],
                     total: Some(2),
                     next_offset: None,
                     loaded_once: true,
@@ -19639,8 +18710,8 @@ mod tests {
                 pending_cache: Some(PlaylistCache {
                     snapshot: "current".into(),
                     items: vec![
-                        cached_playlist_row("spotify:track:one"),
-                        cached_playlist_row("spotify:track:two"),
+                        cached_playlist_row("jellyfin:track:one"),
+                        cached_playlist_row("jellyfin:track:two"),
                     ],
                     total: 10_000,
                     next_offset: Some(500),
@@ -19674,7 +18745,7 @@ mod tests {
             offset: 0,
             generation: 7,
             result: Ok(crate::api::models::Page {
-                items: vec![cached_playlist_row("spotify:track:stale")],
+                items: vec![cached_playlist_row("jellyfin:track:stale")],
                 total: 10_000,
                 limit: PLAYLIST_PAGE_SIZE,
                 offset: 0,
@@ -19685,7 +18756,7 @@ mod tests {
         assert_eq!(page.items.items.len(), 2);
         assert_eq!(
             page.items.items[0].playable().map(PlayableItem::uri),
-            Some("spotify:track:one")
+            Some("jellyfin:track:one")
         );
         assert_eq!(page.items.next_offset, Some(500));
 
@@ -19695,7 +18766,7 @@ mod tests {
         let page = app.playlist_pages.get_mut("large").unwrap();
         page.items
             .items
-            .push(cached_playlist_row("spotify:track:three"));
+            .push(cached_playlist_row("jellyfin:track:three"));
         page.items.next_offset = Some(1_000);
         app.checkpoint_playlist_cache("large");
         assert!(
@@ -19719,7 +18790,7 @@ mod tests {
                 }),
                 pending_cache: Some(PlaylistCache {
                     snapshot: "old".into(),
-                    items: vec![cached_playlist_row("spotify:track:old")],
+                    items: vec![cached_playlist_row("jellyfin:track:old")],
                     total: 10_000,
                     next_offset: Some(500),
                     appendable: false,
@@ -19754,7 +18825,7 @@ mod tests {
                     ..Default::default()
                 }),
                 items: PagedList {
-                    items: vec![cached_playlist_row("spotify:track:one")],
+                    items: vec![cached_playlist_row("jellyfin:track:one")],
                     total: Some(10_000),
                     next_offset: Some(50),
                     loaded_once: true,
@@ -19801,7 +18872,7 @@ mod tests {
             .expect("the playlist")
             .items
             .items
-            .push(cached_playlist_row("spotify:track:two"));
+            .push(cached_playlist_row("jellyfin:track:two"));
         app.playlist_pages
             .get_mut("large")
             .expect("the playlist")
@@ -19856,7 +18927,7 @@ mod tests {
                         ..Default::default()
                     }),
                     items: PagedList {
-                        items: vec![cached_playlist_row("spotify:track:one")],
+                        items: vec![cached_playlist_row("jellyfin:track:one")],
                         total: Some(1),
                         next_offset: None,
                         loaded_once: true,
@@ -19911,7 +18982,7 @@ mod tests {
                         ..Default::default()
                     }),
                     items: PagedList {
-                        items: vec![cached_playlist_row("spotify:track:old")],
+                        items: vec![cached_playlist_row("jellyfin:track:old")],
                         total: Some(1),
                         next_offset: None,
                         loaded_once: true,
@@ -19975,7 +19046,7 @@ mod tests {
                 offset: 0,
                 generation,
                 result: Ok(ApiPage {
-                    items: vec![cached_playlist_row("spotify:track:new")],
+                    items: vec![cached_playlist_row("jellyfin:track:new")],
                     total: 1,
                     limit: PLAYLIST_PAGE_SIZE,
                     offset: 0,
@@ -20019,8 +19090,8 @@ mod tests {
                 }),
                 items: PagedList {
                     items: vec![
-                        cached_playlist_row("spotify:track:one"),
-                        cached_playlist_row("spotify:track:two"),
+                        cached_playlist_row("jellyfin:track:one"),
+                        cached_playlist_row("jellyfin:track:two"),
                     ],
                     total: Some(1_000),
                     next_offset: Some(550),
@@ -20063,8 +19134,8 @@ mod tests {
         let mut items = PagedList::default();
         items.restore_cached(
             vec![
-                cached_playlist_row("spotify:track:remove"),
-                cached_playlist_row("spotify:track:keep"),
+                cached_playlist_row("jellyfin:track:remove"),
+                cached_playlist_row("jellyfin:track:keep"),
             ],
             2,
             None,
@@ -20083,7 +19154,7 @@ mod tests {
         app.apply(
             Action::RemoveFromPlaylist {
                 playlist_id: "edit".into(),
-                uris: vec!["spotify:track:remove".into()],
+                uris: vec!["jellyfin:track:remove".into()],
             },
             &egui::Context::default(),
         );
@@ -20109,7 +19180,7 @@ mod tests {
         app.backend.set_offline(true);
         let mut items = PagedList::default();
         items.restore_cached(
-            vec![cached_playlist_row("spotify:track:cached"); 499],
+            vec![cached_playlist_row("jellyfin:track:cached"); 499],
             1000,
             Some(499),
         );
@@ -20128,7 +19199,7 @@ mod tests {
             offset: 450,
             generation: 0,
             result: Ok(crate::api::models::Page {
-                items: vec![cached_playlist_row("spotify:track:fresh"); 50],
+                items: vec![cached_playlist_row("jellyfin:track:fresh"); 50],
                 total: 1000,
                 offset: 450,
                 limit: 50,
@@ -20147,7 +19218,7 @@ mod tests {
         app.backend.set_offline(true);
         let mut items = PagedList::default();
         items.restore_cached(
-            vec![cached_playlist_row("spotify:track:first"); 50],
+            vec![cached_playlist_row("jellyfin:track:first"); 50],
             1000,
             Some(50),
         );
@@ -20165,7 +19236,7 @@ mod tests {
                 items,
                 pending_cache: Some(PlaylistCache {
                     snapshot: "same".into(),
-                    items: vec![cached_playlist_row("spotify:track:cached"); 500],
+                    items: vec![cached_playlist_row("jellyfin:track:cached"); 500],
                     total: 1000,
                     next_offset: Some(500),
                     appendable: false,
@@ -20184,7 +19255,7 @@ mod tests {
     fn scrollbar_windows_share_the_cache_and_deduplicate_pending_requests() {
         let mut app = headless_app();
         app.backend.set_offline(true);
-        let first = cached_playlist_row("spotify:track:first");
+        let first = cached_playlist_row("jellyfin:track:first");
         app.playlist_pages.insert(
             "scroll".into(),
             PlaylistPage {
@@ -20213,7 +19284,7 @@ mod tests {
             offset: 700,
             generation: 7,
             result: Ok(crate::api::models::Page {
-                items: vec![cached_playlist_row("spotify:track:distant"); 50],
+                items: vec![cached_playlist_row("jellyfin:track:distant"); 50],
                 total: 1000,
                 offset: 700,
                 limit: 50,
@@ -20287,13 +19358,13 @@ mod tests {
     fn null_album_slots_are_not_shuffle_candidates() {
         let mut app = headless_app();
         app.backend.set_offline(true);
-        let album: crate::api::models::Album = serde_json::from_str(r#"{"tracks":{"items":[{"uri":"spotify:track:a"},null,{"uri":"spotify:track:c"}],"total":3}}"#).unwrap();
+        let album: crate::api::models::Album = serde_json::from_str(r#"{"tracks":{"items":[{"uri":"jellyfin:track:a"},null,{"uri":"jellyfin:track:c"}],"total":3}}"#).unwrap();
         let mut page = AlbumPage::default();
         page.tracks.absorb(0, album.tracks.unwrap());
         app.album_pages.insert("album".into(), page);
         assert_eq!(
-            app.context_track_uris("spotify:album:album"),
-            Some(vec!["spotify:track:a".into(), "spotify:track:c".into()])
+            app.context_track_uris("jellyfin:album:album"),
+            Some(vec!["jellyfin:track:a".into(), "jellyfin:track:c".into()])
         );
     }
 
@@ -20334,7 +19405,7 @@ mod tests {
                     ..Default::default()
                 }),
                 items: PagedList {
-                    items: vec![cached_playlist_row("spotify:track:first")],
+                    items: vec![cached_playlist_row("jellyfin:track:first")],
                     total: Some(10_000),
                     next_offset: Some(50),
                     loaded_once: true,
@@ -20373,7 +19444,7 @@ mod tests {
             offset: 6_900,
             generation,
             result: Ok(crate::api::models::Page {
-                items: vec![cached_playlist_row("spotify:track:6901")],
+                items: vec![cached_playlist_row("jellyfin:track:6901")],
                 total: 10_000,
                 limit: PLAYLIST_PAGE_SIZE,
                 offset: 6_900,
@@ -20417,7 +19488,7 @@ mod tests {
                     ..Default::default()
                 }),
                 items: PagedList {
-                    items: vec![cached_playlist_row("spotify:track:old")],
+                    items: vec![cached_playlist_row("jellyfin:track:old")],
                     total: Some(500),
                     next_offset: Some(50),
                     loaded_once: true,
@@ -20443,7 +19514,7 @@ mod tests {
         assert_eq!(page.items_generation, 8);
         assert_eq!(
             page.items.items[0].playable().map(PlayableItem::uri),
-            Some("spotify:track:old")
+            Some("jellyfin:track:old")
         );
 
         app.handle_api(ApiResponse::PlaylistItems {
@@ -20451,7 +19522,7 @@ mod tests {
             offset: 0,
             generation: 9,
             result: Ok(crate::api::models::Page {
-                items: vec![cached_playlist_row("spotify:track:new")],
+                items: vec![cached_playlist_row("jellyfin:track:new")],
                 total: 500,
                 limit: PLAYLIST_PAGE_SIZE,
                 offset: 0,
@@ -20467,7 +19538,7 @@ mod tests {
         assert_eq!(page.cache_saved_through, Some(50));
         assert_eq!(
             page.items.items[0].playable().map(PlayableItem::uri),
-            Some("spotify:track:new")
+            Some("jellyfin:track:new")
         );
     }
 
@@ -20484,7 +19555,7 @@ mod tests {
         app.selected_device = None;
         app.local.connected = false;
         app.shuffle_wanted = false;
-        let context = "spotify:playlist:pl1";
+        let context = "jellyfin:playlist:pl1";
         let rows = app.context_track_uris(context).unwrap();
         app.resume_context = Some(context.into());
         app.resume_track = Some(rows[7].clone());
@@ -20589,7 +19660,7 @@ mod tests {
             .map(|(index, id)| PlayHistory {
                 track: Track {
                     id: Some((*id).into()),
-                    uri: format!("spotify:track:{id}"),
+                    uri: format!("jellyfin:track:{id}"),
                     name: format!("Recent {id}"),
                     artists: vec![ArtistRef {
                         name: "Recent Artist".into(),
@@ -20646,7 +19717,7 @@ mod tests {
             .queued_play
             .as_ref()
             .expect("waiting for the local engine");
-        assert_eq!(request.uris, ["spotify:track:middle"]);
+        assert_eq!(request.uris, ["jellyfin:track:middle"]);
         assert_eq!(
             request.offset_position,
             Some(0),
@@ -20654,7 +19725,7 @@ mod tests {
         );
         assert_eq!(
             app.intent_track.as_ref().map(|intent| intent.uri.as_str()),
-            Some("spotify:track:middle"),
+            Some("jellyfin:track:middle"),
             "the chosen song is the one shown as starting"
         );
 
@@ -20664,13 +19735,13 @@ mod tests {
             Action::PlayFromRow {
                 context: RowContext::Uris(
                     vec![
-                        "spotify:track:middle".to_string(),
-                        "spotify:track:newest".to_string(),
-                        "spotify:track:middle".to_string(),
+                        "jellyfin:track:middle".to_string(),
+                        "jellyfin:track:newest".to_string(),
+                        "jellyfin:track:middle".to_string(),
                     ]
                     .into(),
                 ),
-                uri: "spotify:track:middle".into(),
+                uri: "jellyfin:track:middle".into(),
                 index: 2,
             },
             &ctx,
@@ -20689,8 +19760,8 @@ mod tests {
             app.shuffle_wanted = shuffle;
             app.apply(
                 Action::PlayFromRow {
-                    context: RowContext::Uris(vec!["spotify:track:middle".into()].into()),
-                    uri: "spotify:track:middle".into(),
+                    context: RowContext::Uris(vec!["jellyfin:track:middle".into()].into()),
+                    uri: "jellyfin:track:middle".into(),
                     index: 73,
                 },
                 &ctx,
@@ -20708,11 +19779,11 @@ mod tests {
                 other => panic!("unexpected playback request: {other:?}"),
             };
             assert_eq!(device.as_deref(), Some("speaker"));
-            assert_eq!(play.uris, ["spotify:track:middle"]);
+            assert_eq!(play.uris, ["jellyfin:track:middle"]);
             assert_eq!(play.offset_position, Some(0));
             assert_eq!(
                 app.intent_track.as_ref().map(|intent| intent.uri.as_str()),
-                Some("spotify:track:middle")
+                Some("jellyfin:track:middle")
             );
         }
         app.backend.shutdown();
@@ -20802,7 +19873,7 @@ mod tests {
         click_collection_action(
             &ctx,
             &mut app,
-            "spotify:playlist:pl0",
+            "jellyfin:playlist:pl0",
             egui::pos2(87.0, 28.0),
         );
         assert!(app.playing_context_shuffle());
@@ -20824,12 +19895,12 @@ mod tests {
             .expect("demo playing context")
             .uri
             .clone();
-        assert_ne!(playing_context, "spotify:playlist:pl0");
+        assert_ne!(playing_context, "jellyfin:playlist:pl0");
         app.remote = Some(remote);
         click_collection_action(
             &ctx,
             &mut app,
-            "spotify:playlist:pl0",
+            "jellyfin:playlist:pl0",
             egui::pos2(28.0, 28.0),
         );
 
@@ -20837,7 +19908,7 @@ mod tests {
         assert!(matches!(
             requests.as_slice(),
             [ApiRequest::ShufflePlay { device_id: Some(device), play }]
-                if device == "remote1" && play.context_uri.as_deref() == Some("spotify:playlist:pl0")
+                if device == "remote1" && play.context_uri.as_deref() == Some("jellyfin:playlist:pl0")
         ));
         app.backend.shutdown();
     }
@@ -20884,7 +19955,7 @@ mod tests {
         click_collection_action(
             &ctx,
             &mut app,
-            "spotify:playlist:pl0",
+            "jellyfin:playlist:pl0",
             egui::pos2(87.0, 28.0),
         );
         assert!(app.playing_context_shuffle());
@@ -20944,7 +20015,7 @@ mod tests {
         click_collection_action(
             &ctx,
             &mut app,
-            "spotify:playlist:pl0",
+            "jellyfin:playlist:pl0",
             egui::pos2(87.0, 28.0),
         );
         assert!(matches!(
@@ -21001,7 +20072,7 @@ mod tests {
         let playing_context = app
             .playing_context_uri()
             .expect("demo is playing a collection");
-        let other_collection = "spotify:playlist:pl0";
+        let other_collection = "jellyfin:playlist:pl0";
         assert_ne!(playing_context, other_collection);
         app.open(Page::Playlist("pl0".into()));
 
@@ -21048,9 +20119,9 @@ mod tests {
                 let track = |id: &str, name: &str, available, local| Track {
                     id: Some(id.into()),
                     uri: if local {
-                        "spotify:local:Artist:Album:Song:180".into()
+                        "jellyfin:local:Artist:Album:Song:180".into()
                     } else {
-                        format!("spotify:track:{id}")
+                        format!("jellyfin:track:{id}")
                     },
                     name: name.into(),
                     is_playable: Some(available),
@@ -21173,7 +20244,7 @@ mod tests {
                 if filtered {
                     assert_eq!(
                         request.uris,
-                        vec!["spotify:track:first", "spotify:track:first"],
+                        vec!["jellyfin:track:first", "jellyfin:track:first"],
                         "a filtered view keeps only its shown songs and preserves duplicates"
                     );
                     assert_eq!(request.offset_position, Some(0));
@@ -21181,9 +20252,9 @@ mod tests {
                     assert_eq!(
                         request.uris,
                         vec![
-                            "spotify:track:first",
-                            "spotify:track:first",
-                            "spotify:track:other"
+                            "jellyfin:track:first",
+                            "jellyfin:track:first",
+                            "jellyfin:track:other"
                         ]
                     );
                     assert_eq!(
@@ -21192,7 +20263,7 @@ mod tests {
                         "playback starts at the first playable row"
                     );
                 }
-                assert_eq!(app.now_playing().unwrap().uri, "spotify:track:first");
+                assert_eq!(app.now_playing().unwrap().uri, "jellyfin:track:first");
                 let mut settled = ctx.run_ui(
                     egui::RawInput {
                         screen_rect: Some(egui::Rect::from_min_size(
@@ -21277,7 +20348,7 @@ mod tests {
         let ctx = egui::Context::default();
         let first = Track {
             id: Some("first".into()),
-            uri: "spotify:track:first".into(),
+            uri: "jellyfin:track:first".into(),
             name: "First in the sorted view".into(),
             duration_ms: 180_000,
             ..Default::default()
@@ -21287,7 +20358,7 @@ mod tests {
             PlaylistPage {
                 items: PagedList {
                     items: vec![
-                        cached_playlist_row("spotify:track:other"),
+                        cached_playlist_row("jellyfin:track:other"),
                         PlaylistItem {
                             item: Some(PlayableItem::Track(first.clone())),
                             ..Default::default()
@@ -21303,8 +20374,8 @@ mod tests {
         app.apply(
             Action::PlayFromRow {
                 context: RowContext::View {
-                    context_uri: "spotify:playlist:mix".into(),
-                    uris: vec![first.uri.clone(), "spotify:track:other".into()].into(),
+                    context_uri: "jellyfin:playlist:mix".into(),
+                    uris: vec![first.uri.clone(), "jellyfin:track:other".into()].into(),
                     editable_playlist: None,
                 },
                 uri: String::new(),
@@ -21321,14 +20392,14 @@ mod tests {
         assert!(now.loading);
         assert_eq!(
             app.queued_play.as_ref().unwrap().uris,
-            vec![first.uri.clone(), "spotify:track:other".into()]
+            vec![first.uri.clone(), "jellyfin:track:other".into()]
         );
         assert_eq!(
             app.playlist_pages["mix"].items.items[0]
                 .playable()
                 .unwrap()
                 .uri(),
-            "spotify:track:other",
+            "jellyfin:track:other",
             "previewing must not change the playlist order"
         );
         app.intent_track.as_mut().unwrap().at =
@@ -21347,7 +20418,7 @@ mod tests {
         app.selected_device = None;
         app.plays = crate::history::History::default();
         let state_dir =
-            std::env::temp_dir().join(format!("spotifast-repeat-history-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-repeat-history-{}", std::process::id()));
         app.dirs.state = state_dir.clone();
         for sequence in [1, 2] {
             app.handle_local(LocalState {
@@ -21355,7 +20426,7 @@ mod tests {
                 playback: Playback::Playing,
                 track_sequence: sequence,
                 track: Some(crate::player::LocalTrack {
-                    uri: "spotify:track:short".into(),
+                    uri: "jellyfin:track:short".into(),
                     title: "Short interlude".into(),
                     duration_ms: 40_000,
                     ..Default::default()
@@ -21397,7 +20468,7 @@ mod tests {
         app.remote = None;
         app.selected_device = None;
         app.shuffle_wanted = false;
-        let rows = app.context_track_uris("spotify:playlist:pl1").unwrap();
+        let rows = app.context_track_uris("jellyfin:playlist:pl1").unwrap();
         let old = crate::player::LocalTrack {
             uri: rows[7].clone(),
             duration_ms: 200_000,
@@ -21412,7 +20483,7 @@ mod tests {
         };
         app.last_now_playing_uri = Some(rows[7].clone());
         app.manual_queue = vec![rows[0].clone()];
-        app.play_request(PlayRequest::context("spotify:playlist:pl1"), false);
+        app.play_request(PlayRequest::context("jellyfin:playlist:pl1"), false);
         assert!(
             app.queued_play.is_none(),
             "the connected engine received it"
@@ -21466,7 +20537,7 @@ mod tests {
                             items: if base_offset == 0 {
                                 Vec::new()
                             } else {
-                                vec![cached_playlist_row("spotify:track:middle")]
+                                vec![cached_playlist_row("jellyfin:track:middle")]
                             },
                             ..Default::default()
                         },
@@ -21474,12 +20545,12 @@ mod tests {
                     },
                 );
             }
-            app.play_request(PlayRequest::context("spotify:playlist:large"), false);
+            app.play_request(PlayRequest::context("jellyfin:playlist:large"), false);
             let request = app.queued_play.as_ref().unwrap();
             assert_eq!(request.offset_uri, None, "base offset {base_offset:?}");
             assert_eq!(request.offset_position, Some(0));
             let load = local_load(request, false);
-            assert_eq!(load.context_uri.as_deref(), Some("spotify:playlist:large"));
+            assert_eq!(load.context_uri.as_deref(), Some("jellyfin:playlist:large"));
             assert_eq!(load.offset_index, Some(0));
             assert!(load.uris.is_empty());
         }
@@ -21488,9 +20559,9 @@ mod tests {
     #[test]
     fn playlist_play_skips_missing_local_and_unavailable_prefix_rows() {
         let mut app = headless_app();
-        let mut local = cached_playlist_row("spotify:local:artist:album:track");
+        let mut local = cached_playlist_row("jellyfin:local:artist:album:track");
         local.is_local = true;
-        let mut unavailable = cached_playlist_row("spotify:track:unavailable");
+        let mut unavailable = cached_playlist_row("jellyfin:track:unavailable");
         let Some(PlayableItem::Track(track)) = unavailable.item.as_mut() else {
             panic!("a track fixture");
         };
@@ -21503,18 +20574,18 @@ mod tests {
                         Default::default(),
                         local,
                         unavailable,
-                        cached_playlist_row("spotify:track:first"),
-                        cached_playlist_row("spotify:track:second"),
+                        cached_playlist_row("jellyfin:track:first"),
+                        cached_playlist_row("jellyfin:track:second"),
                     ],
                     ..Default::default()
                 },
                 ..Default::default()
             },
         );
-        app.play_request(PlayRequest::context("spotify:playlist:playlist"), false);
+        app.play_request(PlayRequest::context("jellyfin:playlist:playlist"), false);
         assert_eq!(
             app.queued_play.as_ref().unwrap().offset_uri.as_deref(),
-            Some("spotify:track:first")
+            Some("jellyfin:track:first")
         );
     }
 
@@ -21525,19 +20596,20 @@ mod tests {
             "playlist".into(),
             PlaylistPage {
                 items: PagedList {
-                    items: vec![cached_playlist_row("spotify:track:first")],
+                    items: vec![cached_playlist_row("jellyfin:track:first")],
                     ..Default::default()
                 },
                 ..Default::default()
             },
         );
-        let context = "spotify:playlist:playlist";
+        let context = "jellyfin:playlist:playlist";
         for shuffle in [false, true] {
             app.shuffle_wanted = shuffle;
             for request in [
-                PlayRequest::context(context).starting_at_uri("spotify:track:chosen"),
+                PlayRequest::context(context).starting_at_uri("jellyfin:track:chosen"),
                 PlayRequest::context(context).starting_at_index(7),
-                PlayRequest::tracks(vec!["spotify:track:sorted-first".into()]).starting_at_index(0),
+                PlayRequest::tracks(vec!["jellyfin:track:sorted-first".into()])
+                    .starting_at_index(0),
             ] {
                 app.play_request(request.clone(), false);
                 let queued = app.queued_play.as_ref().unwrap();
@@ -21795,19 +20867,19 @@ mod tests {
         let mut app = headless_app();
         app.library.playlists = Loadable::Loaded(vec![
             Playlist {
-                uri: "spotify:playlist:open".into(),
+                uri: "jellyfin:playlist:open".into(),
                 tracks: Some(TrackCount { total: 3 }),
                 ..Default::default()
             },
             Playlist {
-                uri: "spotify:playlist:unopened".into(),
+                uri: "jellyfin:playlist:unopened".into(),
                 tracks: Some(TrackCount { total: 57 }),
                 ..Default::default()
             },
         ]);
         app.library.albums.items = vec![SavedAlbum {
             album: Album {
-                uri: "spotify:album:saved".into(),
+                uri: "jellyfin:album:saved".into(),
                 total_tracks: Some(12),
                 ..Default::default()
             },
@@ -21820,11 +20892,11 @@ mod tests {
                 items: PagedList {
                     items: vec![
                         PlaylistItem {
-                            item: track("spotify:track:one"),
+                            item: track("jellyfin:track:one"),
                             ..Default::default()
                         },
                         PlaylistItem {
-                            item: track("spotify:track:two"),
+                            item: track("jellyfin:track:two"),
                             ..Default::default()
                         },
                     ],
@@ -21838,11 +20910,11 @@ mod tests {
         assert!(matches!(app.target(), Target::Remote(Some(_))));
 
         // The playlist on screen: the start is one of its own rows.
-        let (uri, position) = app.shuffle_start("spotify:playlist:open");
+        let (uri, position) = app.shuffle_start("jellyfin:playlist:open");
         assert!(
             matches!(
                 uri.as_deref(),
-                Some("spotify:track:one" | "spotify:track:two")
+                Some("jellyfin:track:one" | "jellyfin:track:two")
             ),
             "the start comes from the rows, got {uri:?}"
         );
@@ -21851,9 +20923,9 @@ mod tests {
         // Begun from the sidebar or a menu, with no rows loaded: a
         // position inside the length the library reported.
         for (context, len) in [
-            ("spotify:playlist:unopened", 57),
-            ("spotify:album:saved", 12),
-            ("spotify:user:someone:collection", 9),
+            ("jellyfin:playlist:unopened", 57),
+            ("jellyfin:album:saved", 12),
+            ("jellyfin:user:someone:collection", 9),
         ] {
             for _ in 0..50 {
                 let (uri, position) = app.shuffle_start(context);
@@ -21868,74 +20940,32 @@ mod tests {
         // Over 50 draws a 57-song playlist should not have sat still on
         // one song, let alone on the first.
         let drawn: std::collections::HashSet<Option<u32>> = (0..50)
-            .map(|_| app.shuffle_start("spotify:playlist:unopened").1)
+            .map(|_| app.shuffle_start("jellyfin:playlist:unopened").1)
             .collect();
         assert!(drawn.len() > 1, "the starting position never moved");
 
         // Nothing saved, nothing loaded: no offset to give.
-        assert_eq!(app.shuffle_start("spotify:playlist:unknown"), (None, None));
+        assert_eq!(app.shuffle_start("jellyfin:playlist:unknown"), (None, None));
 
         // Local playback: librespot picks the starting track itself.
         app.selected_device = None;
         assert!(matches!(app.target(), Target::Local));
         assert_eq!(
-            app.shuffle_start("spotify:playlist:unopened"),
+            app.shuffle_start("jellyfin:playlist:unopened"),
             (None, None),
             "librespot is left to draw its own"
         );
-    }
-
-    /// A Free account is told once per sign-in that nothing will play;
-    /// a Premium one is not bothered.
-    #[test]
-    fn a_free_account_is_told_once_that_it_cannot_play() {
-        let me = |product: &str| {
-            ApiResponse::Me(Ok(crate::api::models::User {
-                id: "someone".into(),
-                product: Some(product.into()),
-                ..Default::default()
-            }))
-        };
-        let mut app = headless_app();
-        app.handle_api(me("free"));
-        assert!(matches!(app.dialog, Some(Dialog::PremiumNeeded)));
-        app.dialog = None;
-        app.handle_api(me("free"));
-        assert!(app.dialog.is_none(), "the notice is shown once");
-
-        let mut app = headless_app();
-        app.handle_api(me("premium"));
-        assert!(app.dialog.is_none());
-    }
-
-    /// Only the personal playlists themselves belong on the shelf, not
-    /// what Spotify generates for an artist who took one of their names.
-    #[test]
-    fn the_shelf_takes_the_playlist_and_not_an_artist_named_after_it() {
-        assert!(is_made_for_you("Discover Weekly", "Discover Weekly"));
-        assert!(is_made_for_you("release radar", "Release Radar"));
-        assert!(is_made_for_you("daylist", "daylist"));
-        assert!(is_made_for_you("Daily Mix 3", "Daily Mix"));
-        assert!(is_made_for_you("Daily Mix", "Daily Mix"));
-        assert!(!is_made_for_you("Discover Weekly Mix", "Discover Weekly"));
-        assert!(!is_made_for_you(
-            "This Is Discover Weekly",
-            "Discover Weekly"
-        ));
-        assert!(!is_made_for_you("Release Radar Radio", "Release Radar"));
-        assert!(!is_made_for_you("Daily Mix Radio", "Daily Mix"));
-        assert!(!is_made_for_you("Daily Mix 3", "Discover Weekly"));
     }
 
     /// One song plays as a context of its own, so librespot's autoplay
     /// follows it; a list stays a list.
     #[test]
     fn one_song_is_loaded_as_a_context() {
-        let one = local_load(&PlayRequest::tracks(vec!["spotify:track:a".into()]), false);
-        assert_eq!(one.context_uri.as_deref(), Some("spotify:track:a"));
+        let one = local_load(&PlayRequest::tracks(vec!["jellyfin:track:a".into()]), false);
+        assert_eq!(one.context_uri.as_deref(), Some("jellyfin:track:a"));
         assert!(one.uris.is_empty() && !one.autoplay);
         let two = local_load(
-            &PlayRequest::tracks(vec!["spotify:track:a".into(), "spotify:track:b".into()])
+            &PlayRequest::tracks(vec!["jellyfin:track:a".into(), "jellyfin:track:b".into()])
                 .starting_at_index(1),
             true,
         );
@@ -21946,7 +20976,7 @@ mod tests {
         // command (see a_chosen_row_in_a_list_never_loads_shuffled).
         assert_eq!(two.shuffle, None);
         let episode = local_load(
-            &PlayRequest::tracks(vec!["spotify:episode:e".into()]),
+            &PlayRequest::tracks(vec!["jellyfin:episode:e".into()]),
             false,
         );
         assert_eq!(episode.context_uri, None);
@@ -21966,21 +20996,21 @@ mod tests {
         };
         let playing = LocalState {
             playback: Playback::Playing,
-            track: track("spotify:track:last"),
+            track: track("jellyfin:track:last"),
             position_ms: 198_500,
             connected: true,
             ..LocalState::default()
         };
         let stopped = LocalState {
             playback: Playback::Stopped,
-            track: track("spotify:track:last"),
+            track: track("jellyfin:track:last"),
             connected: true,
             ..LocalState::default()
         };
-        let list: Vec<String> = vec!["spotify:track:first".into(), "spotify:track:last".into()];
+        let list: Vec<String> = vec!["jellyfin:track:first".into(), "jellyfin:track:last".into()];
         assert_eq!(
             autoplay_seed(Some(&list), true, &playing, &stopped).as_deref(),
-            Some("spotify:track:last")
+            Some("jellyfin:track:last")
         );
         assert_eq!(autoplay_seed(Some(&list), false, &playing, &stopped), None);
         assert_eq!(autoplay_seed(None, true, &playing, &stopped), None);
@@ -21990,7 +21020,7 @@ mod tests {
         };
         assert_eq!(autoplay_seed(Some(&list), true, &mid_song, &stopped), None);
         let not_last = LocalState {
-            track: track("spotify:track:first"),
+            track: track("jellyfin:track:first"),
             ..playing.clone()
         };
         assert_eq!(autoplay_seed(Some(&list), true, &not_last, &stopped), None);
@@ -22095,7 +21125,7 @@ mod tests {
             ControlCommand::SetShuffle(true),
             ControlCommand::SetRepeat(RepeatMode::Track),
             ControlCommand::SeekTo(90_000),
-            ControlCommand::PlayUri("spotify:playlist:pl1".to_owned()),
+            ControlCommand::PlayUri("jellyfin:playlist:pl1".to_owned()),
             ControlCommand::Transfer("abc123".to_owned()),
             ControlCommand::RefreshDevices,
             // Nothing is playing in a headless app, so there is no track to
@@ -22135,7 +21165,7 @@ mod tests {
         app.handle_local(LocalState {
             playback: Playback::Playing,
             track: Some(crate::player::LocalTrack {
-                uri: "spotify:track:t1".to_owned(),
+                uri: "jellyfin:track:t1".to_owned(),
                 title: "Go".to_owned(),
                 artists: vec![ArtistRef {
                     name: "The Band".to_owned(),
@@ -22177,7 +21207,7 @@ mod tests {
                 "unknown",
                 // Local playback is this computer, which Spotify has not
                 // named because it is not a remote device.
-                "Spotifast",
+                "Jellifast",
             ]
         );
         // No devices seen yet is an empty array, not an empty string, so a
@@ -22309,12 +21339,12 @@ mod tests {
         let mut app = headless_app();
         let ctx = egui::Context::default();
         app.actions
-            .push(Action::OpenLink("spotify:playlist:pl1".into()));
+            .push(Action::OpenLink("jellyfin:playlist:pl1".into()));
         app.apply_actions(&ctx);
 
         // #then the window is asked for but the page waits
         assert_eq!(*app.page(), Page::Home);
-        assert_eq!(app.pending_link.as_deref(), Some("spotify:playlist:pl1"));
+        assert_eq!(app.pending_link.as_deref(), Some("jellyfin:playlist:pl1"));
 
         // #when the account arrives
         app.user = Some(User {
@@ -22332,7 +21362,7 @@ mod tests {
             "t1".into(),
             Track {
                 id: Some("t1".into()),
-                uri: "spotify:track:t1".into(),
+                uri: "jellyfin:track:t1".into(),
                 album: Some(Album {
                     id: "al1".into(),
                     ..Album::default()
@@ -22341,7 +21371,7 @@ mod tests {
             },
         );
         app.actions
-            .push(Action::OpenLink("spotify:track:t1".into()));
+            .push(Action::OpenLink("jellyfin:track:t1".into()));
         app.apply_actions(&ctx);
 
         // #then its album's page opens
@@ -22350,12 +21380,12 @@ mod tests {
 
         // #when a song still unknown is linked
         app.actions
-            .push(Action::OpenLink("spotify:track:t2".into()));
+            .push(Action::OpenLink("jellyfin:track:t2".into()));
         app.apply_actions(&ctx);
 
         // #then the link waits for Spotify's answer rather than guessing
         assert_eq!(*app.page(), Page::Album("al1".into()));
-        assert_eq!(app.pending_link.as_deref(), Some("spotify:track:t2"));
+        assert_eq!(app.pending_link.as_deref(), Some("jellyfin:track:t2"));
         assert!(app.track_requests.contains("t2"));
 
         // #when Spotify has no such song
@@ -22390,7 +21420,7 @@ mod tests {
 
         // #when
         app.actions
-            .push(Action::OpenLink("spotify:station:track:t1".into()));
+            .push(Action::OpenLink("jellyfin:station:track:t1".into()));
         app.apply_actions(&ctx);
 
         // #then
@@ -22408,8 +21438,8 @@ mod tests {
         let mut app = headless_app();
         let ctx = egui::Context::default();
         for link in [
-            "https://open.spotify.com/search/old",
-            "https://open.spotify.com/search/artist%3ABj%C3%B6rk",
+            "jellifast://search/old",
+            "jellifast://search/artist%3ABj%C3%B6rk",
         ] {
             app.open_link(crate::link::parse(link).unwrap());
             app.apply_actions(&ctx);
@@ -22435,7 +21465,7 @@ mod tests {
         app.apply_actions(&ctx);
         assert_eq!(app.search.serial, serial);
 
-        app.open_link(crate::link::parse("https://open.spotify.com/search").unwrap());
+        app.open_link(crate::link::parse("jellifast://search").unwrap());
         app.apply_actions(&ctx);
         assert_eq!(*app.page(), Page::Search);
         assert!(app.search.query.is_empty());
@@ -22447,10 +21477,10 @@ mod tests {
     #[test]
     fn mpris_search_links_open_search_on_a_private_bus() {
         use std::time::{Duration, Instant};
-        const CHILD: &str = "SPOTIFAST_SEARCH_PRIVATE_BUS";
+        const CHILD: &str = "JELLIFAST_SEARCH_PRIVATE_BUS";
         if std::env::var_os(CHILD).is_none() {
             let root = std::env::temp_dir().join(format!(
-                "spotifast-search-bus-{:016x}",
+                "jellifast-search-bus-{:016x}",
                 rand::random::<u64>()
             ));
             std::fs::create_dir(&root).unwrap();
@@ -22491,7 +21521,7 @@ mod tests {
             .unwrap();
         let call = |uri: &str| {
             client.call_method(
-                Some("org.mpris.MediaPlayer2.spotifast"),
+                Some("org.mpris.MediaPlayer2.jellifast"),
                 "/org/mpris/MediaPlayer2",
                 Some("org.mpris.MediaPlayer2.Player"),
                 "OpenUri",
@@ -22499,7 +21529,7 @@ mod tests {
             )
         };
         let deadline = Instant::now() + Duration::from_secs(5);
-        while let Err(error) = call("https://open.spotify.com/search/here%20comes%20the%20sun") {
+        while let Err(error) = call("jellifast://search/here%20comes%20the%20sun") {
             assert!(Instant::now() < deadline, "MPRIS did not start: {error}");
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -22518,7 +21548,7 @@ mod tests {
         assert!(matches!(app.actions.as_slice(), [Action::OpenLink(_)]));
         let schemes: Vec<String> = zbus::blocking::Proxy::new(
             &client,
-            "org.mpris.MediaPlayer2.spotifast",
+            "org.mpris.MediaPlayer2.jellifast",
             "/org/mpris/MediaPlayer2",
             "org.mpris.MediaPlayer2",
         )
@@ -22532,70 +21562,11 @@ mod tests {
         assert_eq!(app.search.committed, "here comes the sun");
         assert!(app.now_playing().is_none());
 
-        call("spotify:playlist:unchanged").unwrap();
+        call("jellyfin:playlist:unchanged").unwrap();
         wait_for_command(&mut app);
         assert!(
-            matches!(app.actions.as_slice(), [Action::PlayContext { uri, offset_uri: None, offset_index: None }] if uri == "spotify:playlist:unchanged")
+            matches!(app.actions.as_slice(), [Action::PlayContext { uri, offset_uri: None, offset_index: None }] if uri == "jellyfin:playlist:unchanged")
         );
-    }
-
-    /// A playlist shared by invitation takes songs once Spotify's rootlist
-    /// says so, though the Web API calls it neither owned nor collaborative.
-    #[test]
-    fn a_playlist_shared_by_invitation_takes_songs() {
-        // #given a friend's playlist in the library
-        let mut app = headless_app();
-        app.user = Some(User {
-            id: "me".into(),
-            ..User::default()
-        });
-        let theirs = Playlist {
-            id: "shared".into(),
-            name: "the Best Music Ever".into(),
-            uri: "spotify:playlist:shared".into(),
-            owner: crate::api::models::Owner {
-                id: Some("friend".into()),
-                ..Default::default()
-            },
-            ..Playlist::default()
-        };
-        let mut mine = theirs.clone();
-        mine.id = "mine".into();
-        mine.uri = "spotify:playlist:mine".into();
-        mine.owner.id = Some("me".into());
-        let mut public = theirs.clone();
-        public.id = "public".into();
-        public.uri = "spotify:playlist:public".into();
-        app.library.playlists = Loadable::Loaded(vec![theirs.clone(), mine.clone(), public]);
-
-        // #then only the account's own takes songs before Spotify's word
-        assert!(app.can_edit_playlist(&mine));
-        assert!(!app.can_edit_playlist(&theirs));
-        assert_eq!(
-            app.editable_playlists(),
-            vec![("mine".to_string(), "the Best Music Ever".to_string())]
-        );
-
-        // #when the rootlist names the friend's playlist among the editable
-        app.handle_backend_events(vec![Event::Rootlist {
-            result: Ok(crate::player::Rootlist {
-                entries: vec![crate::player::RootlistEntry::Playlist(
-                    "spotify:playlist:shared".into(),
-                )],
-                editable: ["spotify:playlist:shared".to_string()]
-                    .into_iter()
-                    .collect(),
-            }),
-        }]);
-
-        // #then it takes songs, and the followed public one still does not
-        assert!(app.can_edit_playlist(&theirs));
-        let editable: Vec<String> = app
-            .editable_playlists()
-            .into_iter()
-            .map(|(id, _)| id)
-            .collect();
-        assert_eq!(editable, ["shared", "mine"]);
     }
 
     /// The player bar menu offers removal only while the playing track
@@ -22611,7 +21582,7 @@ mod tests {
         let mine = Playlist {
             id: "mine".into(),
             name: "Mine".into(),
-            uri: "spotify:playlist:mine".into(),
+            uri: "jellyfin:playlist:mine".into(),
             owner: crate::api::models::Owner {
                 id: Some("me".into()),
                 ..Default::default()
@@ -22622,7 +21593,7 @@ mod tests {
         let theirs = Playlist {
             id: "theirs".into(),
             name: "Theirs".into(),
-            uri: "spotify:playlist:theirs".into(),
+            uri: "jellyfin:playlist:theirs".into(),
             owner: crate::api::models::Owner {
                 id: Some("friend".into()),
                 ..Default::default()
@@ -22635,7 +21606,7 @@ mod tests {
             PlaylistPage {
                 playlist: Loadable::Loaded(Playlist {
                     id: "paged".into(),
-                    uri: "spotify:playlist:paged".into(),
+                    uri: "jellyfin:playlist:paged".into(),
                     owner: crate::api::models::Owner {
                         id: Some("me".into()),
                         ..Default::default()
@@ -22655,21 +21626,21 @@ mod tests {
         };
 
         // #when the owned playlist plays, its snapshot rides along
-        assume(&mut app, "spotify:playlist:mine");
+        assume(&mut app, "jellyfin:playlist:mine");
         assert_eq!(
             app.editable_context_playlist(),
             Some(RowContext::Context {
-                uri: "spotify:playlist:mine".into(),
+                uri: "jellyfin:playlist:mine".into(),
                 editable_playlist: Some(("mine".into(), Some("snap1".into()))),
             })
         );
 
         // #when the page alone knows the playlist, it still counts
-        assume(&mut app, "spotify:playlist:paged");
+        assume(&mut app, "jellyfin:playlist:paged");
         assert_eq!(
             app.editable_context_playlist(),
             Some(RowContext::Context {
-                uri: "spotify:playlist:paged".into(),
+                uri: "jellyfin:playlist:paged".into(),
                 editable_playlist: Some(("paged".into(), Some("snap9".into()))),
             })
         );
@@ -22677,100 +21648,17 @@ mod tests {
         // #then anything else stays quiet: a friend's list, an album,
         // Liked Songs, radio, and an unknown playlist
         for uri in [
-            "spotify:playlist:theirs",
-            "spotify:album:alb1",
-            "spotify:user:me:collection",
-            "spotify:station:track:xyz",
-            "spotify:playlist:unloaded",
+            "jellyfin:playlist:theirs",
+            "jellyfin:album:alb1",
+            "jellyfin:user:me:collection",
+            "jellyfin:station:track:xyz",
+            "jellyfin:playlist:unloaded",
         ] {
             assume(&mut app, uri);
             assert_eq!(app.editable_context_playlist(), None, "{uri}");
         }
         app.assumed_context = None;
         assert_eq!(app.editable_context_playlist(), None, "no context");
-    }
-
-    /// Folder order survives a restart, but only for the account that
-    /// supplied it; edit grants wait for a fresh session answer.
-    #[test]
-    fn the_last_playlist_tree_stays_visible_for_its_account() {
-        let root = std::env::temp_dir().join(format!(
-            "spotifast-rootlist-restart-test-{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&root);
-        let dirs = AppDirs {
-            config: root.join("config"),
-            state: root.join("state"),
-            cache: root.join("cache"),
-        };
-        let options = || AppOptions {
-            media_controls: false,
-            restore_sign_in: false,
-            tray: false,
-        };
-        let entries = vec![
-            crate::player::RootlistEntry::FolderStart {
-                id: "folder".into(),
-                name: "Favorites".into(),
-            },
-            crate::player::RootlistEntry::Playlist("spotify:playlist:one".into()),
-            crate::player::RootlistEntry::FolderEnd,
-        ];
-        let mut app = App::new(
-            &Waker::default(),
-            dirs.clone(),
-            Settings::default(),
-            options(),
-        );
-        app.auth = AuthStatus::Connected {
-            username: "listener".into(),
-        };
-        app.user = Some(User {
-            id: "listener".into(),
-            ..User::default()
-        });
-        app.handle_backend_events(vec![Event::Rootlist {
-            result: Ok(crate::player::Rootlist {
-                entries: entries.clone(),
-                editable: ["spotify:playlist:one".to_string()].into_iter().collect(),
-            }),
-        }]);
-        assert!(app.session_dirty);
-        app.save_session();
-        drop(app);
-
-        let mut restored = App::new(
-            &Waker::default(),
-            dirs.clone(),
-            Settings::default(),
-            options(),
-        );
-        restored.handle_api(ApiResponse::Me(Ok(User {
-            id: "someone-else".into(),
-            ..User::default()
-        })));
-        assert!(
-            restored.rootlist.is_empty(),
-            "another account sees no cached tree"
-        );
-        restored.handle_api(ApiResponse::Me(Ok(User {
-            id: "listener".into(),
-            ..User::default()
-        })));
-        assert_eq!(restored.rootlist, entries);
-        assert!(
-            restored.editable_by_grant.is_empty(),
-            "cached order must not cache a stale edit grant"
-        );
-        restored.handle_auth(AuthStatus::SignedOut);
-        assert!(restored.rootlist.is_empty());
-        assert_eq!(
-            restored.rootlist_cache, None,
-            "signing out removes the account's cached tree"
-        );
-        drop(restored);
-        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -22895,7 +21783,7 @@ mod tests {
                 items: (0..100)
                     .map(|n| SavedTrack {
                         track: Track {
-                            uri: format!("spotify:track:{n}"),
+                            uri: format!("jellyfin:track:{n}"),
                             id: Some(n.to_string()),
                             name: format!("Song {n}"),
                             ..Default::default()
@@ -22946,20 +21834,20 @@ mod tests {
     #[test]
     fn liking_and_unliking_update_rows_before_the_network_answers() {
         let mut app = cached_liked_app();
-        app.set_saved("spotify:track:0".into(), false);
+        app.set_saved("jellyfin:track:0".into(), false);
         assert_eq!(app.library.liked.items.len(), 99);
         assert!(
             !app.library
                 .liked
                 .items
                 .iter()
-                .any(|item| item.track.uri == "spotify:track:0")
+                .any(|item| item.track.uri == "jellyfin:track:0")
         );
-        app.set_saved("spotify:track:new".into(), true);
+        app.set_saved("jellyfin:track:new".into(), true);
         assert_eq!(app.library.liked.items.len(), 100);
-        assert_eq!(app.library.liked.items[0].track.uri, "spotify:track:new");
+        assert_eq!(app.library.liked.items[0].track.uri, "jellyfin:track:new");
         app.handle_api(ApiResponse::SavedChanged {
-            uris: vec!["spotify:track:new".into()],
+            uris: vec!["jellyfin:track:new".into()],
             saved: true,
             result: Ok(()),
         });
@@ -22968,12 +21856,12 @@ mod tests {
             100,
             "acknowledging a like does not clear the list"
         );
-        assert_eq!(app.library.liked.items[0].track.uri, "spotify:track:new");
+        assert_eq!(app.library.liked.items[0].track.uri, "jellyfin:track:new");
         app.handle_api(ApiResponse::Contains {
-            uris: vec!["spotify:track:new".into()],
+            uris: vec!["jellyfin:track:new".into()],
             result: Ok(vec![false]),
         });
-        assert_eq!(app.is_saved("spotify:track:new"), Some(true));
+        assert_eq!(app.is_saved("jellyfin:track:new"), Some(true));
     }
 
     #[test]
@@ -23020,13 +21908,13 @@ mod tests {
             },
         };
         let mut app = headless_app();
-        app.library.liked.items = vec![saved("spotify:track:stays"), saved("spotify:track:goes")];
+        app.library.liked.items = vec![saved("jellyfin:track:stays"), saved("jellyfin:track:goes")];
         app.library.liked.total = Some(2);
         app.library.liked.loaded_once = true;
         let before = app.library.liked.revision;
 
         app.handle_api(ApiResponse::SavedChanged {
-            uris: vec!["spotify:track:goes".into()],
+            uris: vec!["jellyfin:track:goes".into()],
             saved: false,
             result: Ok(()),
         });
@@ -23038,7 +21926,7 @@ mod tests {
             .iter()
             .map(|item| item.track.uri.as_str())
             .collect();
-        assert_eq!(uris, vec!["spotify:track:stays"], "the song is gone");
+        assert_eq!(uris, vec!["jellyfin:track:stays"], "the song is gone");
         assert_eq!(app.library.liked.total, Some(1));
         assert_ne!(
             app.library.liked.revision, before,

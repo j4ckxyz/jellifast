@@ -1,0 +1,63 @@
+# Jellifast as a Flatpak, built from source: the manifest Flathub builds
+# from. The copy in the Flathub repository names a tag and its commit in
+# the source below and carries cargo-sources.json next to it; flathub.sh
+# writes both. For a local build, this one takes the checkout as it is:
+#
+#   flatpak-builder --user --install --force-clean build-dir \
+#       packaging/flatpak/io.github.j4ckxyz.Jellifast.yml
+#
+# The release workflow does not build from source twice: it packages the
+# binary the Linux job already built, through the bundle manifest beside
+# this one, whose finish-args are the same as these.
+id: io.github.j4ckxyz.Jellifast
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: jellifast
+finish-args:
+  # Wayland first, X11 when that is what there is.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # Sound: PulseAudio, which PipeWire also answers.
+  - --socket=pulseaudio
+  # The Jellyfin server, lyrics, and update checks.
+  - --share=network
+  # The tray item, media keys and Now Playing over MPRIS, and the name the
+  # single instance is found by.
+  # Platform storage for this application's sign-in.
+  - --talk-name=org.freedesktop.secrets
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --own-name=org.mpris.MediaPlayer2.jellifast
+  # Older Flatpak versions leave XDG_STATE_HOME unset. Keep the fallback
+  # state directory (session, history, logs, and credential markers) durable.
+  - --persist=.local/state
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/jellifast/cargo
+modules:
+  - name: jellifast
+    buildsystem: simple
+    build-commands:
+      - cargo --offline fetch --manifest-path Cargo.toml --verbose
+      - cargo --offline build --release --locked
+      - install -Dm755 target/release/jellifast /app/bin/jellifast
+      - install -Dm644 packaging/applications/*.desktop /app/share/applications/io.github.j4ckxyz.Jellifast.desktop
+      - sed -i 's/^Icon=.*$/Icon=io.github.j4ckxyz.Jellifast/;s/^StartupWMClass=jellifast$/StartupWMClass=io.github.j4ckxyz.Jellifast/' /app/share/applications/io.github.j4ckxyz.Jellifast.desktop
+      - install -Dm644 packaging/icons/*.svg /app/share/icons/hicolor/scalable/apps/io.github.j4ckxyz.Jellifast.svg
+      - install -Dm644 packaging/flatpak/io.github.j4ckxyz.Jellifast.metainfo.xml /app/share/metainfo/io.github.j4ckxyz.Jellifast.metainfo.xml
+      - install -Dm644 LICENSE /app/share/licenses/jellifast/LICENSE
+    sources:
+      - type: dir
+        path: ../..
+      # Supply the current app ID even when generating a manifest for an older tag.
+      - type: file
+        path: io.github.j4ckxyz.Jellifast.metainfo.xml
+        dest: packaging/flatpak
+      # Every crate the lockfile names, for the offline build; flathub.sh
+      # writes it with flatpak-cargo-generator.
+      - cargo-sources.json

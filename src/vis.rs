@@ -10,11 +10,9 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use librespot_playback::audio_backend::{Sink, SinkResult};
-use librespot_playback::convert::Converter;
-use librespot_playback::decoder::AudioPacket;
-use librespot_playback::mixer::VolumeGetter;
-use librespot_playback::{NUM_CHANNELS, SAMPLE_RATE};
+use crate::audio::{
+    AudioPacket, Converter, NUM_CHANNELS, SAMPLE_RATE, Sink, SinkResult, VolumeGetter,
+};
 
 /// Half a second of audio.
 const KEPT: usize = SAMPLE_RATE as usize / 2;
@@ -231,7 +229,6 @@ impl Sink for Tapped {
                 }
                 AudioPacket::Samples(samples)
             }
-            raw => raw,
         };
         self.inner.write(packet, converter)
     }

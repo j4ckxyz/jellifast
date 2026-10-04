@@ -321,7 +321,7 @@ mod tests {
     #[test]
     fn a_focused_text_field_keeps_the_arrow_keys_it_edits_with() {
         let root =
-            std::env::temp_dir().join(format!("spotifast-text-arrows-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-text-arrows-test-{}", std::process::id()));
         let dirs = AppDirs {
             config: root.join("config"),
             state: root.join("state"),
@@ -526,7 +526,7 @@ mod tests {
     #[test]
     fn b_toggles_the_playing_song_in_liked_songs() {
         let root = std::env::temp_dir().join(format!(
-            "spotifast-like-shortcut-test-{}",
+            "jellifast-like-shortcut-test-{}",
             std::process::id()
         ));
         let dirs = AppDirs {
@@ -562,7 +562,7 @@ mod tests {
 
         assert!(matches!(
             app.actions.as_slice(),
-            [Action::ToggleSaved(uri)] if uri == "spotify:track:trk0"
+            [Action::ToggleSaved(uri)] if uri == "jellyfin:track:trk0"
         ));
         app.backend.shutdown();
         let _ = std::fs::remove_dir_all(root);
@@ -574,7 +574,7 @@ mod tests {
     #[test]
     fn a_shift_shortcut_is_not_taken_by_the_plain_one_it_extends() {
         let root = std::env::temp_dir().join(format!(
-            "spotifast-shift-shortcut-test-{}",
+            "jellifast-shift-shortcut-test-{}",
             std::process::id()
         ));
         let dirs = AppDirs {

@@ -1,6 +1,6 @@
-# Contributing to Spotifast
+# Contributing to Jellifast
 
-Spotifast is a native Spotify client. Changes should improve the
+Jellifast is a native music player for Jellyfin. Changes should improve the
 desktop app without adding a browser, fallback services, or another backend.
 
 ## Before opening an issue
@@ -13,21 +13,18 @@ For a feature, explain the user problem. Discuss large changes in an issue
 before writing code. Existing code does not guarantee that a feature fits the
 project.
 
-Some boundaries come from Spotify or from upstream libraries:
+Some boundaries are deliberate:
 
-- Local playback requires Spotify Premium because librespot requires it.
-- Spotify Lossless is not available through librespot. Spotifast will
-  reconsider it if librespot gains lawful upstream support; proposals that
-  depend on bypassing Spotify's DRM are out of scope.
-- Spotify tracks must come from Spotify. Substituting audio from YouTube,
-  Piped, `yt-dlp`, or another catalogue is out of scope.
-- Spotifast will not embed a browser engine, add telemetry, or introduce a
-  Spotifast-operated service.
+- Music comes from the Jellyfin server the listener signed in to. Substituting
+  audio from YouTube, Piped, `yt-dlp`, or another catalogue is out of scope.
+- Jellifast is a music player. Films, series and live TV belong in Jellyfin's
+  own clients.
+- Jellifast will not embed a browser engine, add telemetry, or introduce a
+  Jellifast-operated service.
 
-[What Spotify Lets a Client Do](docs/_reference/what-spotify-allows.md)
-lists what each of the three surfaces offers and the requests none of them
-can serve, with the reason for each; a request in its last section is
-answered from there and closed.
+[What Jellyfin Offers](docs/_reference/what-jellyfin-offers.md) lists which
+part of a Jellyfin server stands behind each part of the interface, what is not
+there yet, and what Jellyfin does not have.
 
 Duplicate, out-of-scope, or incomplete issues may be closed with a short
 explanation.
@@ -69,9 +66,9 @@ implementation and regression tests live in the Copilot Triage repository.
    are product features. Keep the UI thread free of network and disk waits.
 2. **Focused.** Prefer a complete, coherent workflow over a collection of
    settings, modes, and speculative features.
-3. **Honest integrations.** Use Spotify's Web API and librespot for what they
-   support. Do not scrape, impersonate capabilities, bypass technical
-   protections, or silently replace one service with another.
+3. **Honest integrations.** Use the Jellyfin server's API for what it
+   supports. Do not show a control the server has nothing behind, and do not
+   silently replace one service with another.
 4. **Cross-platform by default.** Linux, macOS, and Windows are supported
    products. Platform-specific code must be isolated and the other targets
    must keep compiling.
@@ -84,7 +81,7 @@ implementation and regression tests live in the Copilot Triage repository.
 
 ## Pull requests
 
-Keep each pull request to one change. Explain why it belongs in Spotifast,
+Keep each pull request to one change. Explain why it belongs in Jellifast,
 what changed, and how you tested it. Avoid unrelated formatting, refactors,
 generated prose, and large mechanical rewrites.
 
@@ -136,11 +133,10 @@ cargo test --locked --all-targets
 cargo test --locked --all-targets --all-features
 cargo test --locked --all-features --doc
 RUSTDOCFLAGS='-D warnings' cargo doc --locked --all-features --no-deps
-(cd docs && bundle exec jekyll build)
 ```
 
 Linux needs the development packages listed under
-[Build from source](https://spotifast.rocks/getting-started/#build-from-source); `nix develop`
+[Build from source](https://github.com/j4ckxyz/jellifast#build); `nix develop`
 provides the complete development environment. The command compatibility test
 also needs `dbus-run-session`, to use a private bus instead of the desktop's.
 MilkDrop builds libprojectM
@@ -157,7 +153,13 @@ desktop keyring unlocked, run
 It uses temporary dummy grants and deletes them afterward. CI runs this check
 on macOS and Windows; Linux requires an available Secret Service provider.
 The ordinary test suite uses an isolated fake store and never reads a real
-Spotify grant. Demo mode also skips credential restoration.
+sign-in. Demo mode also skips credential restoration.
+
+Changes to the Jellyfin client or the player also need a run against a real
+server: `cargo run --no-default-features --example jellyfin_probe` signs in,
+reads the library and decodes a song, and `-- --play` runs the player for a
+few seconds with the volume at zero. Without `JELLYFIN_URL`, `JELLYFIN_USER`
+and `JELLYFIN_PASSWORD` it uses Jellyfin's public demo server.
 
 Flatpak state-persistence changes also need
 `packaging/flatpak/test-state.sh`. It requires Flatpak, Ruby, and an installed
@@ -169,7 +171,7 @@ Translation changes also need `.github/scripts/update-translations.sh --check`,
 using GNU gettext tools with Rust support. Run the script without `--check` when
 translatable source strings change, and review any fuzzy or missing entries in
 the updated PO files. Normal Cargo builds compile the catalogs without gettext
-tools. See [Translating Spotifast](docs/_reference/translating.md) for the pilot
+tools. See [Translating Jellifast](docs/_reference/translating.md) for the pilot
 scope and contributor workflow.
 
 Documentation deployments take their canonical URL from the domain configured

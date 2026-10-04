@@ -644,7 +644,7 @@ fn menus(app: &mut App, view: &mut View, rows: &[Row], queue_uris: &[String], he
 fn add_menu(app: &mut App, ui: &mut egui::Ui) {
     let locale = app.locale;
     if ui
-        .button(gettext(locale, "Search Spotify").as_ref())
+        .button(gettext(locale, "Search your library").as_ref())
         .clicked()
     {
         app.actions.push(Action::FocusSearch);
@@ -662,9 +662,7 @@ fn rem_menu(app: &mut App, ui: &mut egui::Ui) {
         false,
         egui::Button::new(gettext(locale, "Remove selected").as_ref()),
     )
-    .on_disabled_hover_text(
-        gettext(locale, "Spotify does not let apps remove one queued song.").as_ref(),
-    );
+    .on_disabled_hover_text(gettext(locale, "One queued song cannot be removed yet.").as_ref());
     if ui
         .add_enabled(
             app.can_clear_queue(),

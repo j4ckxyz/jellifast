@@ -1,17 +1,21 @@
 ---
-title: Translating Spotifast
-description: Help translate Spotifast and preview the work so far.
+title: Translating Jellifast
+description: Help translate Jellifast and preview the work so far.
 nav_order: 6
 ---
+> Inherited from the project Jellifast was forked from and adapted to Jellyfin.
+> "Since 0.x" notes refer to that project's releases. See
+> [What Jellyfin Offers](../_reference/what-jellyfin-offers.md) for what differs.
 
-Spotifast follows your computer's language when it has a translation for it,
+
+Jellifast follows your computer's language when it has a translation for it,
 and uses English otherwise. **Settings → Appearance → Language** picks another
 language, listed under its own name, and applies it at once; **System** follows
 the computer again. This arrived in 0.10.0. Corrections from
 fluent speakers are welcome.
 
 Translations are stored in `.po` files, a common format supported by editors
-such as Poedit and Weblate. They are included with Spotifast, so the app does
+such as Poedit and Weblate. They are included with Jellifast, so the app does
 not contact an online translation service.
 
 ## Languages and coverage
@@ -41,7 +45,7 @@ and screen-reader names. The partial catalogues translate the earlier pilot:
 navigation, Library controls, the player bar, Queue and Lyrics. Everything they
 do not translate yet appears in English. The tray menu, the macOS menu bar and
 Dock menu, and the Windows taskbar buttons are still English in every language,
-as are error details reported by Spotify, the network or the system.
+as are error details reported by the server, the network or the system.
 
 A regional system language uses the closest catalogue: `es-MX` and `es-419`
 use Spanish, `de-AT` uses German, `pt-BR` and a plain `pt` use Portuguese
@@ -50,14 +54,14 @@ use Spanish, `de-AT` uses German, `pt-BR` and a plain `pt` use Portuguese
 Traditional Chinese. When the system lists several preferred languages, the
 first one with a catalogue wins.
 
-Song, album, artist and playlist names come from Spotify or their creators and
+Song, album, artist and playlist names come from the server or their creators and
 are kept as provided, as are lyric lines and failure details. Generated queue
 playlist names translate the surrounding words while retaining the song title
 or the date in `YYYY-MM-DD` form.
 
 ## Edit and preview
 
-The repository's `assets/i18n/spotifast.pot` is the English source template.
+The repository's `assets/i18n/jellifast.pot` is the English source template.
 Open the PO for your language, such as `assets/i18n/es.po`, in your translation editor. Edit `msgstr` values;
 keep `msgid`, `msgid_plural`, `msgctxt`, and placeholders such as `{count}`, `{date}`,
 `{track}` and `{error}` unchanged.
@@ -65,7 +69,7 @@ Translator comments explain the placeholders. Clear a fuzzy flag only after
 reviewing the translation against its current English source.
 
 Build and preview your changes in demo mode, which uses sample music data and
-needs no Spotify account. `--demo-language` takes a tag from the table above
+needs no the server account. `--demo-language` takes a tag from the table above
 and overrides both the setting and the system language:
 
 ```sh
@@ -129,7 +133,7 @@ A maintainer must also register the locale in the app, including how system
 language tags map to it, and preview it before it becomes available. Adding a
 PO alone does not add a language to the Settings list.
 
-Use the [translation problem form](https://github.com/crmne/spotifast/issues/new?template=translation.yml)
+Use the [translation problem form](https://github.com/j4ckxyz/jellifast/issues/new?template=translation.yml)
 for incorrect wording, missing translations or text that does not fit. Each
 report gets its own issue. Include the language, version, affected control, and
 the text you see; a suggested correction is welcome. The catalog headers link

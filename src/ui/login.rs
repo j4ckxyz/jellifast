@@ -12,7 +12,6 @@ use crate::theme;
 pub fn show(app: &mut App, ui: &mut egui::Ui, connecting: bool) {
     let palette = app.palette;
     let locale = app.locale;
-    let ctx = ui.ctx().clone();
     egui::CentralPanel::default()
         .frame(Frame::new().fill(palette.window))
         .show(ui, |ui| {
@@ -36,11 +35,11 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, connecting: bool) {
                 .data(|data| data.get_temp::<bool>(proxy_id))
                 .unwrap_or(false);
             let card_height: f32 = if !proxy_open {
-                400.0
+                560.0
             } else if app.settings.proxy_mode.is_manual() {
-                720.0
+                880.0
             } else {
-                500.0
+                660.0
             };
             let card_height = card_height.min((rect.height() - 64.0).max(0.0));
             let card = Rect::from_center_size(
@@ -70,93 +69,68 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, connecting: bool) {
                     let (logo, _) = ui.allocate_exact_size(Vec2::splat(72.0), egui::Sense::hover());
                     theme::logo(ui, logo.center(), 72.0);
                     ui.add_space(6.0);
-                    theme::text(ui, "Spotifast", theme::bold(30.0), palette.text);
-                    theme::text(ui, gettext(locale, "A native Spotify client."), theme::regular(14.5), palette.secondary);
+                    theme::text(ui, "Jellifast", theme::bold(30.0), palette.text);
+                    theme::text(ui, gettext(locale, "A native music player for Jellyfin."), theme::regular(14.5), palette.secondary);
                     ui.add_space(22.0);
-                    match &app.auth {
-                        AuthStatus::WaitingForBrowser { url } => {
-                            let url = url.clone();
-                            ui.horizontal(|ui| {
-                                ui.add_space((ui.available_width() - 250.0).max(0.0) / 2.0);
-                                theme::spinner(ui, 18.0, palette.accent);
-                                theme::text(ui, gettext(locale, "Waiting for Spotify in your browser…"), theme::medium(14.0), palette.text);
-                            });
+                    if connecting || matches!(app.auth, AuthStatus::Connecting) {
+                        ui.horizontal(|ui| {
+                            ui.add_space((ui.available_width() - 200.0).max(0.0) / 2.0);
+                            theme::spinner(ui, 18.0, palette.accent);
+                            theme::text(ui, gettext(locale, "Signing in…"), theme::medium(14.0), palette.text);
+                        });
+                        ui.add_space(14.0);
+                        if theme::pill_button(ui, &palette, &gettext(locale, "Cancel"), false).clicked() {
+                            app.actions.push(Action::CancelSignIn);
+                        }
+                    } else {
+                        if let AuthStatus::Failed(message) = &app.auth {
+                            ui.add(
+                                egui::Label::new(egui::RichText::new(message.clone()).font(theme::regular(13.0)).color(palette.danger)).wrap(),
+                            );
                             ui.add_space(6.0);
-                            if theme::link(ui, gettext(locale, "Didn't open? Open the sign-in page again"), theme::regular(13.0), palette.secondary).clicked() {
-                                ctx.open_url(egui::OpenUrl::new_tab(url));
-                            }
-                            ui.add_space(14.0);
-                            if theme::pill_button(ui, &palette, &gettext(locale, "Cancel"), false).clicked() {
-                                app.actions.push(Action::CancelSignIn);
+                        }
+                        let mut submit = false;
+                        let server = field(ui, app, "login-server", &gettext(locale, "Server address"), Field::Server);
+                        let username = field(ui, app, "login-username", &gettext(locale, "User name"), Field::Username);
+                        let password = field(ui, app, "login-password", &gettext(locale, "Password"), Field::Password);
+                        // Enter in any field signs in, as a form does.
+                        for response in [&server, &username, &password] {
+                            if response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
+                                submit = true;
                             }
                         }
-                        _ if connecting => {
-                            ui.horizontal(|ui| {
-                                ui.add_space((ui.available_width() - 200.0).max(0.0) / 2.0);
-                                theme::spinner(ui, 18.0, palette.accent);
-                                theme::text(ui, gettext(locale, "Connecting to Spotify…"), theme::medium(14.0), palette.text);
-                            });
+                        if !FOCUSED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                            // The first empty field takes the keyboard once.
+                            if app.login.server.is_empty() {
+                                server.request_focus();
+                            } else if app.login.username.is_empty() {
+                                username.request_focus();
+                            } else {
+                                password.request_focus();
+                            }
                         }
-                        AuthStatus::Failed(message) => {
-                            let message = message.clone();
-                            ui.add(
-                                egui::Label::new(egui::RichText::new(message).font(theme::regular(13.0)).color(palette.danger)).wrap(),
-                            );
-                            ui.add_space(12.0);
-                            if big_button(ui, app, &gettext(locale, "Try again")) {
+                        ui.add_space(8.0);
+                        if big_button(ui, app, &gettext(locale, "Sign in")) {
+                            submit = true;
+                        }
+                        if submit {
+                            if app.login.server.trim().is_empty() || app.login.username.trim().is_empty() {
+                                app.auth = AuthStatus::Failed(
+                                    gettext(locale, "Enter your server's address and your user name.").into_owned(),
+                                );
+                            } else {
                                 app.actions.push(Action::SignIn);
                             }
-                            if app.settings.web_client_id.is_some() {
-                                ui.add_space(10.0);
-                                if theme::pill_button(
-                                    ui,
-                                    &palette,
-                                    &gettext(locale, "Use the shared Spotify app instead"),
-                                    false,
-                                )
-                                .clicked()
-                                {
-                                    // A wrong personal Client ID trapped the
-                                    // user here with Settings out of reach.
-                                    app.settings.web_client_id = None;
-                                    app.mark_settings_dirty();
-                                    app.actions.push(Action::ConfigurePersonalWebApp);
-                                }
-                            }
                         }
-                        _ => {
-                            if big_button(ui, app, &gettext(locale, "Sign in with Spotify")) {
-                                app.actions.push(Action::SignIn);
-                            }
-                            ui.add_space(10.0);
-                            ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(gettext(locale, "Sign in through your browser. Spotifast never sees your password. Local playback needs Spotify Premium."))
-                                        .font(theme::regular(12.5))
-                                        .color(palette.secondary),
-                                )
-                                .wrap(),
-                            );
-                            if app.settings.web_client_id.is_some() {
-                                // A wrong personal Client ID dead-ends in the
-                                // browser on Spotify's side, so the app never
-                                // hears it failed; the way out has to stand
-                                // here, not only on the failure screen.
-                                ui.add_space(10.0);
-                                if theme::pill_button(
-                                    ui,
-                                    &palette,
-                                    &gettext(locale, "Use the shared Spotify app instead"),
-                                    false,
-                                )
-                                .clicked()
-                                {
-                                    app.settings.web_client_id = None;
-                                    app.mark_settings_dirty();
-                                    app.actions.push(Action::ConfigurePersonalWebApp);
-                                }
-                            }
-                        }
+                        ui.add_space(10.0);
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(gettext(locale, "Your password goes to your Jellyfin server and is never stored. Jellifast keeps the access token the server returns in the system credential store."))
+                                    .font(theme::regular(12.5))
+                                    .color(palette.secondary),
+                            )
+                            .wrap(),
+                        );
                     }
                     let mut proxy_open = ui.data(|data| data.get_temp::<bool>(proxy_id)).unwrap_or(false);
                     ui.add_space(4.0);
@@ -185,12 +159,57 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, connecting: bool) {
                 pos2(rect.center().x, rect.bottom() - 24.0),
                 egui::Align2::CENTER_BOTTOM,
                 // Translators: {version} is the app's version number, such as 1.2.0.
-                gettext(locale, "Spotifast {version} • not affiliated with Spotify")
+                gettext(locale, "Jellifast {version} • not affiliated with the Jellyfin project")
                     .replace("{version}", env!("CARGO_PKG_VERSION")),
                 theme::regular(11.5),
                 palette.dim,
             );
         });
+}
+
+/// The sign-in form takes the keyboard once per launch, not every frame.
+static FOCUSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[derive(Clone, Copy)]
+enum Field {
+    Server,
+    Username,
+    Password,
+}
+
+/// One labelled line of the sign-in form.
+fn field(ui: &mut egui::Ui, app: &mut App, id: &str, label: &str, which: Field) -> egui::Response {
+    let palette = app.palette;
+    let locale = app.locale;
+    let width = ui.available_width().min(300.0);
+    ui.allocate_ui_with_layout(Vec2::new(width, 0.0), Layout::top_down(Align::Min), |ui| {
+        theme::text(ui, label, theme::medium(12.5), palette.secondary);
+        Frame::new()
+            .fill(palette.surface)
+            .stroke(Stroke::new(1.0, palette.outline))
+            .corner_radius(CornerRadius::same(8))
+            .inner_margin(Margin::symmetric(12, 9))
+            .show(ui, |ui| {
+                let (text, hint, password) = match which {
+                    Field::Server => (&mut app.login.server, "https://jellyfin.example.org", false),
+                    Field::Username => (&mut app.login.username, "", false),
+                    Field::Password => (&mut app.login.password, "", true),
+                };
+                super::widgets::text_edit(
+                    ui,
+                    locale,
+                    egui::TextEdit::singleline(text)
+                        .id(egui::Id::new(id))
+                        .password(password)
+                        .hint_text(egui::RichText::new(hint).color(palette.dim))
+                        .font(theme::regular(14.0))
+                        .frame(egui::Frame::NONE)
+                        .desired_width(f32::INFINITY),
+                )
+            })
+            .inner
+    })
+    .inner
 }
 
 fn proxy_fields(ui: &mut egui::Ui, app: &mut App) {
@@ -297,7 +316,7 @@ mod tests {
         ctx.enable_accesskit();
         theme::install(&ctx);
         let root = std::env::temp_dir().join(format!(
-            "spotifast-proxy-short-login-{}",
+            "jellifast-proxy-short-login-{}",
             std::process::id()
         ));
         let mut app = App::new(
@@ -346,7 +365,11 @@ mod tests {
             bounds.y0 >= 0.0 && bounds.y1 <= 480.0
         };
         let first = frame(vec![]);
-        assert!(visible_button(&first, "Sign in with Spotify"));
+        // The form is taller than this window: its fields scroll with the
+        // card, and the button below them is there to scroll to.
+        assert!(first.nodes.iter().any(|(_, node)| {
+            node.label() == Some("Sign in") && node.role() == egui::accesskit::Role::Button
+        }));
         let center = |label: &str| {
             let bounds = first
                 .nodes
@@ -359,7 +382,7 @@ mod tests {
             (bounds.x0 + bounds.x1) / 2.0
         };
         assert!(
-            (center("Proxy Settings") - center("Sign in with Spotify")).abs() < 1.0,
+            (center("Proxy Settings") - center("Sign in")).abs() < 1.0,
             "the proxy link stays centered under sign-in"
         );
         frame(vec![

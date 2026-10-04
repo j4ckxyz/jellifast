@@ -3,6 +3,10 @@ title: The Queue's Rules
 description: What the queue shows, what Add to queue does, and what the app promises about both.
 nav_order: 2
 ---
+> Inherited from the project Jellifast was forked from and adapted to Jellyfin.
+> "Since 0.x" notes refer to that project's releases. See
+> [What Jellyfin Offers](../_reference/what-jellyfin-offers.md) for what differs.
+
 
 The queue is the list of what plays next. It has two parts. On top,
 under **Playing next**, are the songs you queued yourself. Below them,
@@ -13,7 +17,7 @@ Above both, **Playing from** names where the playing song came from: the
 playlist, album, artist, or podcast, which opens when clicked, Liked
 Songs, or a radio named after the song, playlist, album, or artist it is
 based on, which opens the radio's page. The line shows only while a song is
-playing from somewhere Spotify reports.
+playing from somewhere the server reports.
 
 These are the rules the app follows. The queue tests in `src/app.rs`
 check every one of them.
@@ -33,7 +37,7 @@ play order.
 Since 0.8.0, starting a playlist in its original order explicitly
 names its first available song from the loaded prefix. If that prefix is not
 loaded, it requests playlist position zero. A page loaded from the middle
-never becomes the beginning. This keeps the full Spotify playlist context;
+never becomes the beginning. This keeps the full the server playlist context;
 the app does not replace it with a shortened list of loaded songs. A request
 waiting for local playback to reconnect keeps the song chosen at the click.
 
@@ -81,9 +85,9 @@ not consume a queue row or restore an older queue saved on this computer.
    changing playback devices asks you to add it again on the new device.
 
    On another device, a rate limit delays additions instead of dropping them.
-   Spotifast retries automatically after Spotify's requested wait and keeps
+   Jellifast retries automatically after the server's requested wait and keeps
    later songs behind the album. Pending rows retain their known titles and
-   durations. If Spotify permanently rejects an addition, only the rejected
+   durations. If the server permanently rejects an addition, only the rejected
    song and any unsent remainder of its album disappear; accepted songs stay.
 
 3. **When a song starts, its row leaves the queue.** It doesn't matter
@@ -92,7 +96,7 @@ not consume a queue row or restore an older queue saved on this computer.
    occurrence leaves: another copy you queued remains until its own turn.
 
 4. **Next removes the top row right away.** The app doesn't wait for
-   Spotify to confirm it.
+   the server to confirm it.
 
 5. **Playing a row from the queue skips to it.** The rows above it are
    skipped and removed, as if you had pressed Next down to it. The rows
@@ -110,16 +114,16 @@ not consume a queue row or restore an older queue saved on this computer.
    below stay. It only shows while this computer is the player, because
    that is the only queue the app can actually clear.
 
-8. **Changes appear immediately.** Spotifast updates the queue before Spotify
+8. **Changes appear immediately.** Jellifast updates the queue before the server
    confirms the change. For local playback, it updates its own player directly.
    Toggling shuffle rechecks the queue so the new playback order appears
    promptly without waiting for the song to finish.
 
-9. **Closing the app keeps the queue.** Spotifast saves it locally. When you
+9. **Closing the app keeps the queue.** Jellifast saves it locally. When you
    resume the last song, it restores your queued songs and playlist position.
 
-10. **Old answers from Spotify are ignored.** Queue responses can be a few
-    seconds late. Spotifast ignores stale responses and asks again. Your
+10. **Old answers from the server are ignored.** Queue responses can be a few
+    seconds late. Jellifast ignores stale responses and asks again. Your
     changes stay visible while it waits for confirmation.
 
 Since 0.8.0, selecting several playlist rows and choosing
@@ -128,7 +132,7 @@ For example, selecting B, C, B adds all three rows. A repeated click still
 counts once, and the notification reports only the rows actually added.
 
 11. **Dragging within *Playing next* reorders it, only on this computer.**
-    Neither the Web API nor librespot can reorder or insert into a live
+    Neither the Web API nor the player can reorder or insert into a live
     queue; the only way to change one is to clear it and re-add its songs
     in the new order, which reaches nothing but the engine actually playing
     them. So dropping a song, dragged from elsewhere, at a position in
@@ -136,6 +140,6 @@ counts once, and the notification reports only the rows actually added.
     *Playing next* elsewhere in the same section moves it, only while this
     computer is the active player. Otherwise every drop still just adds to
     the end, exactly like **Add to queue**. *Next up* is never a drop
-    target: it plays from the current context, not from a list Spotifast
+    target: it plays from the current context, not from a list Jellifast
     can rewrite. While *Playing next* is empty, drop the song on the player
     bar's Queue button instead.

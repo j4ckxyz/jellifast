@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Jellifast
+GenericName=Music Player
+Comment=A native music player for Jellyfin
+Exec=jellifast %u
+Terminal=false
+Categories=AudioVideo;Audio;Player;Music;
+Keywords=jellyfin;music;player;streaming;jellifast;
+Icon=jellifast
+StartupNotify=true
+StartupWMClass=jellifast
+MimeType=x-scheme-handler/jellifast;

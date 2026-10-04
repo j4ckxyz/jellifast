@@ -1739,8 +1739,8 @@ fn playlist_actions<'a>(
         saved: (!owned).then(|| (playlist.uri.clone(), saved)),
         saved_icons: (Icon::CirclePlus, Icon::CircleCheck),
         saved_tooltips: (
-            gettext(locale, "Add to Your Library"),
-            gettext(locale, "Remove from Your Library"),
+            gettext(locale, "Add to favorites"),
+            gettext(locale, "Remove from favorites"),
         ),
         owned_playlist: owned.then(|| playlist.clone()),
         reload,
@@ -1761,8 +1761,8 @@ fn album_actions<'a>(
         saved: Some((album.uri.clone(), saved)),
         saved_icons: (Icon::CirclePlus, Icon::CircleCheck),
         saved_tooltips: (
-            gettext(locale, "Save to Your Library"),
-            gettext(locale, "Remove from Your Library"),
+            gettext(locale, "Add to favorites"),
+            gettext(locale, "Remove from favorites"),
         ),
         owned_playlist: None,
         reload: None,
@@ -1879,7 +1879,7 @@ pub fn liked(app: &mut App, ui: &mut egui::Ui) {
     let collection_uri = app
         .user
         .as_ref()
-        .map(|user| format!("spotify:user:{}:collection", user.id));
+        .map(|user| format!("jellyfin:user:{}:collection", user.id));
     let filter_id = egui::Id::new("liked-filter");
     let mut filter = ui
         .data(|data| data.get_temp::<String>(filter_id))
@@ -2104,7 +2104,7 @@ mod tests {
                 playlist: Loadable::Loaded(Playlist {
                     id: "finite".into(),
                     name: "Finite".into(),
-                    uri: "spotify:playlist:finite".into(),
+                    uri: "jellyfin:playlist:finite".into(),
                     tracks: Some(crate::api::models::TrackCount { total: 1000 }),
                     ..Default::default()
                 }),
@@ -2157,7 +2157,7 @@ mod tests {
             (PlayableItem::Track(Track::default()), None, None),
             (
                 PlayableItem::Track(Track {
-                    uri: "spotify:track:a".into(),
+                    uri: "jellyfin:track:a".into(),
                     ..Default::default()
                 }),
                 None,
@@ -2229,7 +2229,7 @@ mod tests {
                                 positions: None,
                             }),
                             context: RowContext::Context {
-                                uri: "spotify:playlist:retry".into(),
+                                uri: "jellyfin:playlist:retry".into(),
                                 editable_playlist: None,
                             },
                             show_album: false,
@@ -2316,7 +2316,7 @@ mod tests {
                     row_offset: 0,
                     pagination: None,
                     context: RowContext::Context {
-                        uri: "spotify:playlist:filtered".into(),
+                        uri: "jellyfin:playlist:filtered".into(),
                         editable_playlist: None,
                     },
                     show_album: false,
@@ -2344,17 +2344,17 @@ mod tests {
                 let track = Track {
                     id: Some(format!("t_{i}")),
                     name: format!("Nested metadata song {i} with a longer title"),
-                    uri: format!("spotify:track:large-{i}"),
+                    uri: format!("jellyfin:track:large-{i}"),
                     duration_ms: 180_000,
                     artists: vec![ArtistRef {
                         id: Some(format!("artist-{i}")),
                         name: format!("Nested Artist Name {i}"),
-                        uri: Some(format!("spotify:artist:artist-{i}")),
+                        uri: Some(format!("jellyfin:artist:artist-{i}")),
                     }],
                     album: Some(Album {
                         id: format!("alb-{i}"),
                         name: format!("Nested Album Title {i}"),
-                        uri: format!("spotify:album:alb-{i}"),
+                        uri: format!("jellyfin:album:alb-{i}"),
                         images: vec![
                             Image {
                                 url: format!("https://i.scdn.co/image/large-{i}-640"),
@@ -2403,7 +2403,7 @@ mod tests {
                 let track = Track {
                     id: Some(format!("t_{i}")),
                     name: titles[i].to_string(),
-                    uri: format!("spotify:track:t_{i}"),
+                    uri: format!("jellyfin:track:t_{i}"),
                     duration_ms: (i as u32 + 1) * 60_000,
                     track_number: Some(i as u32 + 1),
                     disc_number: Some(1),
@@ -2414,18 +2414,18 @@ mod tests {
                         ArtistRef {
                             id: Some(format!("a_{i}")),
                             name: artists[i].to_string(),
-                            uri: Some(format!("spotify:artist:a_{i}")),
+                            uri: Some(format!("jellyfin:artist:a_{i}")),
                         },
                         ArtistRef {
                             id: Some(format!("feat_{i}")),
                             name: format!("Feat Artist {i}"),
-                            uri: Some(format!("spotify:artist:feat_{i}")),
+                            uri: Some(format!("jellyfin:artist:feat_{i}")),
                         },
                     ],
                     album: Some(Album {
                         id: format!("alb_{i}"),
                         name: albums[i].to_string(),
-                        uri: format!("spotify:album:alb_{i}"),
+                        uri: format!("jellyfin:album:alb_{i}"),
                         images: vec![],
                         release_date: Some("2020-01-01".to_string()),
                         album_type: Some("album".to_string()),
@@ -2437,12 +2437,10 @@ mod tests {
                         popularity: None,
                         tracks: None,
                         copyrights: vec![],
-                        external_urls: Default::default(),
                     }),
                     popularity: None,
                     external_ids: Default::default(),
                     linked_from: None,
-                    external_urls: Default::default(),
                 };
                 (
                     PlayableItem::Track(track),
@@ -2549,7 +2547,7 @@ mod tests {
             items_revision: 5,
             user_names_revision: 2,
             visible: Arc::new([2]),
-            view_uris: Some(Arc::new(["spotify:track:t_2".to_string()])),
+            view_uris: Some(Arc::new(["jellyfin:track:t_2".to_string()])),
             view_positions: Arc::new([Some(0)]),
         };
 
@@ -2586,36 +2584,36 @@ mod tests {
 
     #[test]
     fn sorted_view_context_keeps_playlist_remove_rights() {
-        let uris: Arc<[String]> = Arc::from(["spotify:track:a".to_string()]);
+        let uris: Arc<[String]> = Arc::from(["jellyfin:track:a".to_string()]);
         let editable = Some(("pl1".to_string(), None));
 
         let base = RowContext::Context {
-            uri: "spotify:playlist:pl1".into(),
+            uri: "jellyfin:playlist:pl1".into(),
             editable_playlist: editable.clone(),
         };
         assert_eq!(
             view_context(&base, Some(&uris)),
             RowContext::View {
                 uris: Arc::clone(&uris),
-                context_uri: "spotify:playlist:pl1".into(),
+                context_uri: "jellyfin:playlist:pl1".into(),
                 editable_playlist: editable.clone(),
             }
         );
 
         let readonly = RowContext::Context {
-            uri: "spotify:playlist:pl1".into(),
+            uri: "jellyfin:playlist:pl1".into(),
             editable_playlist: None,
         };
         assert_eq!(
             view_context(&readonly, Some(&uris)),
             RowContext::View {
                 uris: Arc::clone(&uris),
-                context_uri: "spotify:playlist:pl1".into(),
+                context_uri: "jellyfin:playlist:pl1".into(),
                 editable_playlist: None,
             }
         );
 
-        let loose = RowContext::Uris(Arc::from(["spotify:track:b".to_string()]));
+        let loose = RowContext::Uris(Arc::from(["jellyfin:track:b".to_string()]));
         assert_eq!(
             view_context(&loose, Some(&uris)),
             RowContext::Uris(Arc::clone(&uris))
@@ -2626,7 +2624,7 @@ mod tests {
 
     fn test_app() -> App {
         let root = std::env::temp_dir().join(format!(
-            "spotifast-table-cache-{}-{}",
+            "jellifast-table-cache-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -2704,7 +2702,7 @@ mod tests {
                                 row_offset: 0,
                                 pagination: None,
                                 context: RowContext::Context {
-                                    uri: "spotify:playlist:test".into(),
+                                    uri: "jellyfin:playlist:test".into(),
                                     editable_playlist: self
                                         .editable
                                         .then(|| ("test".to_string(), None)),
@@ -2829,7 +2827,7 @@ mod tests {
         );
         table.app.actions.clear();
         table.frame(vec![egui::Event::Copy]);
-        assert_eq!(copied(&table), ["spotify:track:t_0"]);
+        assert_eq!(copied(&table), ["jellyfin:track:t_0"]);
 
         // #when the filter is cleared and every row is selected again
         table.filter.clear();
@@ -2849,7 +2847,7 @@ mod tests {
 
         // #when links are pasted into the editable playlist
         table.app.actions.clear();
-        let links = "https://open.spotify.com/track/abc\nspotify:track:def";
+        let links = "jellifast://track/abc\njellyfin:track:def";
         table.frame(vec![egui::Event::Paste(links.into())]);
 
         // #then the playlist is offered the pasted text
@@ -2979,7 +2977,7 @@ mod tests {
         table.app.actions.clear();
         table.key(egui::Key::Enter);
         assert!(
-            matches!(table.app.actions.as_slice(), [Action::PlayFromRow { uri, index: 2, .. }] if uri == "spotify:track:t_2")
+            matches!(table.app.actions.as_slice(), [Action::PlayFromRow { uri, index: 2, .. }] if uri == "jellyfin:track:t_2")
         );
     }
 
@@ -3005,7 +3003,7 @@ mod tests {
         table.app.actions.clear();
         table.key(egui::Key::Enter);
         assert!(
-            matches!(table.app.actions.as_slice(), [Action::PlayFromRow { context: RowContext::View { uris, .. }, uri, index: 1 }] if uri == "spotify:track:t_1" && uris.as_ref() == ["spotify:track:t_3", "spotify:track:t_1"])
+            matches!(table.app.actions.as_slice(), [Action::PlayFromRow { context: RowContext::View { uris, .. }, uri, index: 1 }] if uri == "jellyfin:track:t_1" && uris.as_ref() == ["jellyfin:track:t_3", "jellyfin:track:t_1"])
         );
         table.filter = "Queen".into();
         table.focus_song("Bohemian Rhapsody");
@@ -3101,13 +3099,13 @@ mod tests {
         table.key(egui::Key::Delete);
         assert!(matches!(table.app.actions.as_slice(),
             [Action::RemoveFromPlaylist { playlist_id, uris }]
-                if playlist_id == "test" && uris == &["spotify:track:t_1"]));
+                if playlist_id == "test" && uris == &["jellyfin:track:t_1"]));
         table.app.actions.clear();
         table.modified_key(egui::Key::ArrowDown, egui::Modifiers::SHIFT);
         table.key(egui::Key::Delete);
         assert!(matches!(table.app.actions.as_slice(),
             [Action::RemoveFromPlaylist { playlist_id, uris }]
-                if playlist_id == "test" && uris == &["spotify:track:t_1", "spotify:track:t_2"]));
+                if playlist_id == "test" && uris == &["jellyfin:track:t_1", "jellyfin:track:t_2"]));
         table.app.actions.clear();
         table.editable = false;
         table.key(egui::Key::Delete);
@@ -3136,7 +3134,7 @@ mod tests {
         if cfg!(target_os = "macos") {
             assert!(matches!(table.app.actions.as_slice(),
                 [Action::RemoveFromPlaylist { playlist_id, uris }]
-                    if playlist_id == "test" && uris == &["spotify:track:t_1", "spotify:track:t_2"]));
+                    if playlist_id == "test" && uris == &["jellyfin:track:t_1", "jellyfin:track:t_2"]));
         } else {
             assert!(table.app.actions.is_empty());
         }
@@ -3333,15 +3331,15 @@ mod tests {
                         &mut app,
                         ui,
                         Actions {
-                            play_uri: Some("spotify:station:track:seed".into()),
-                            view: Some(vec!["spotify:track:a".to_string()].into()),
+                            play_uri: Some("jellyfin:station:track:seed".into()),
+                            view: Some(vec!["jellyfin:track:a".to_string()].into()),
                             saved: None,
                             saved_icons: (Icon::CirclePlus, Icon::CircleCheck),
                             saved_tooltips: Default::default(),
                             owned_playlist: None,
-                            reload: Some((Page::Radio("spotify:track:seed".into()), false)),
+                            reload: Some((Page::Radio("jellyfin:track:seed".into()), false)),
                             name: "Seed Radio",
-                            save_radio: Some("spotify:track:seed".into()),
+                            save_radio: Some("jellyfin:track:seed".into()),
                         },
                         None,
                     )
@@ -3417,7 +3415,7 @@ mod tests {
                                 &mut app,
                                 ui,
                                 Actions {
-                                    play_uri: Some("spotify:playlist:test".into()),
+                                    play_uri: Some("jellyfin:playlist:test".into()),
                                     view: None,
                                     saved: None,
                                     saved_icons: (Icon::CirclePlus, Icon::CircleCheck),
@@ -3541,7 +3539,7 @@ mod tests {
                     &mut app,
                     ui,
                     Actions {
-                        play_uri: Some("spotify:playlist:test".into()),
+                        play_uri: Some("jellyfin:playlist:test".into()),
                         view: None,
                         saved: None,
                         saved_icons: (Icon::CirclePlus, Icon::CircleCheck),
@@ -3601,10 +3599,10 @@ mod tests {
                 &mut app,
                 ui,
                 Actions {
-                    play_uri: Some("spotify:playlist:test".into()),
+                    play_uri: Some("jellyfin:playlist:test".into()),
                     view: Some(Arc::from([
-                        "spotify:track:1".into(),
-                        "spotify:track:2".into(),
+                        "jellyfin:track:1".into(),
+                        "jellyfin:track:2".into(),
                     ])),
                     saved: None,
                     saved_icons: (Icon::CirclePlus, Icon::CircleCheck),
@@ -3648,10 +3646,10 @@ mod tests {
                 &mut app,
                 ui,
                 Actions {
-                    play_uri: Some("spotify:playlist:test".into()),
+                    play_uri: Some("jellyfin:playlist:test".into()),
                     view: Some(Arc::from([
-                        "spotify:track:1".into(),
-                        "spotify:track:2".into(),
+                        "jellyfin:track:1".into(),
+                        "jellyfin:track:2".into(),
                     ])),
                     saved: None,
                     saved_icons: (Icon::CirclePlus, Icon::CircleCheck),
@@ -3673,7 +3671,7 @@ mod tests {
                     uri,
                     offset_uri: None,
                     offset_index: None,
-                }] if uri == "spotify:playlist:test"
+                }] if uri == "jellyfin:playlist:test"
             ),
             "expected PlayContext, got {:?}",
             app.actions
@@ -3699,10 +3697,10 @@ mod tests {
                 &mut app,
                 ui,
                 Actions {
-                    play_uri: Some("spotify:playlist:test".into()),
+                    play_uri: Some("jellyfin:playlist:test".into()),
                     view: Some(Arc::from([
-                        "spotify:track:1".into(),
-                        "spotify:track:2".into(),
+                        "jellyfin:track:1".into(),
+                        "jellyfin:track:2".into(),
                     ])),
                     saved: None,
                     saved_icons: (Icon::CirclePlus, Icon::CircleCheck),
@@ -3746,10 +3744,10 @@ mod tests {
                 &mut app,
                 ui,
                 Actions {
-                    play_uri: Some("spotify:playlist:test".into()),
+                    play_uri: Some("jellyfin:playlist:test".into()),
                     view: Some(Arc::from([
-                        "spotify:track:1".into(),
-                        "spotify:track:2".into(),
+                        "jellyfin:track:1".into(),
+                        "jellyfin:track:2".into(),
                     ])),
                     saved: None,
                     saved_icons: (Icon::CirclePlus, Icon::CircleCheck),
@@ -3771,7 +3769,7 @@ mod tests {
                     context: RowContext::View { uris, context_uri, .. },
                     index: 0,
                     ..
-                }] if uris.as_ref() == ["spotify:track:1", "spotify:track:2"] && context_uri == "spotify:playlist:test"
+                }] if uris.as_ref() == ["jellyfin:track:1", "jellyfin:track:2"] && context_uri == "jellyfin:playlist:test"
             ),
             "expected PlayFromRow, got {:?}",
             app.actions
@@ -3798,10 +3796,10 @@ mod tests {
                 &mut app,
                 ui,
                 Actions {
-                    play_uri: Some("spotify:playlist:test".into()),
+                    play_uri: Some("jellyfin:playlist:test".into()),
                     view: Some(Arc::from([
-                        "spotify:track:1".into(),
-                        "spotify:track:2".into(),
+                        "jellyfin:track:1".into(),
+                        "jellyfin:track:2".into(),
                     ])),
                     saved: None,
                     saved_icons: (Icon::CirclePlus, Icon::CircleCheck),
@@ -3845,10 +3843,10 @@ mod tests {
                 &mut app,
                 ui,
                 Actions {
-                    play_uri: Some("spotify:playlist:test".into()),
+                    play_uri: Some("jellyfin:playlist:test".into()),
                     view: Some(Arc::from([
-                        "spotify:track:1".into(),
-                        "spotify:track:2".into(),
+                        "jellyfin:track:1".into(),
+                        "jellyfin:track:2".into(),
                     ])),
                     saved: None,
                     saved_icons: (Icon::CirclePlus, Icon::CircleCheck),
@@ -3870,7 +3868,7 @@ mod tests {
                     context: RowContext::View { uris, context_uri, .. },
                     index: 0,
                     ..
-                }] if uris.as_ref() == ["spotify:track:1", "spotify:track:2"] && context_uri == "spotify:playlist:test"
+                }] if uris.as_ref() == ["jellyfin:track:1", "jellyfin:track:2"] && context_uri == "jellyfin:playlist:test"
             ),
             "expected PlayFromRow with filtered view, got {:?}",
             app.actions

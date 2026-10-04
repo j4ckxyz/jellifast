@@ -1,0 +1,21 @@
+print_jellifast_post_install() {
+  cat <<'EOF2'
+Jellifast setup:
+
+  Launch it and sign in with your Jellyfin server's address, your user
+  name and your password.
+
+  Closing the window keeps the music playing in the system tray; quit from
+  the tray menu or with Ctrl+Q.
+
+Docs: https://github.com/j4ckxyz/jellifast
+EOF2
+}
+
+post_install() {
+  print_jellifast_post_install
+}
+
+post_upgrade() {
+  print_jellifast_post_install
+}

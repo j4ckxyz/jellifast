@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::api::models::{Artist, PlayableItem, pick_image};
 use crate::app::App;
-use crate::i18n::{gettext, ngettext, pgettext};
+use crate::i18n::{gettext, ngettext};
 use crate::model::{Action, DiscographyFilter, Loadable, Page, RowContext};
 use crate::theme::{self, Icon};
 use crate::util;
@@ -352,9 +352,9 @@ fn artist_actions(app: &mut App, ui: &mut egui::Ui, artist: &Artist) {
             ui,
             &palette,
             &if following {
-                pgettext(locale, "artist", "Following")
+                gettext(locale, "Favorite")
             } else {
-                pgettext(locale, "artist", "Follow")
+                gettext(locale, "Add to favorites")
             },
             false,
         )

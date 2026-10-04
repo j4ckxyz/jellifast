@@ -4,16 +4,16 @@
 /// compiles out and shows the English source (fastframe-i18n tests that). A
 /// catalog listed here must stay complete, and every catalog must keep the
 /// placeholders of whatever it does translate.
-const COMPLETE: &[&str] = &[
-    "de-DE", "es", "fr", "it", "ja", "nl", "pl", "pt-BR", "pt-PT", "ru", "sv", "tr", "zh-Hans",
-    "zh-Hant",
-];
+///
+/// None is listed yet: the catalogs came with the application this one was
+/// forked from, and the strings that changed for Jellyfin await translators.
+const COMPLETE: &[&str] = &[];
 
 #[test]
 fn catalogs_cover_the_template_and_preserve_named_placeholders() {
     // A POT leaves these values for msginit. For this comparison its source
     // language is English; the translator's PO carries its own actual rules.
-    let template = include_str!("../assets/i18n/spotifast.pot").replace(
+    let template = include_str!("../assets/i18n/jellifast.pot").replace(
         "nplurals=INTEGER; plural=EXPRESSION;",
         "nplurals=2; plural=(n != 1);",
     );
@@ -94,7 +94,7 @@ fn catalogs_cover_the_template_and_preserve_named_placeholders() {
     }
     assert_eq!(
         catalogs + 1,
-        <spotifast::i18n::Locale as clap::ValueEnum>::value_variants().len()
+        <jellifast::i18n::Locale as clap::ValueEnum>::value_variants().len()
     );
 }
 

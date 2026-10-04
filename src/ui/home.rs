@@ -7,7 +7,7 @@ use egui::{CornerRadius, Rect, Sense, Vec2, pos2, vec2};
 use crate::api::models::{Episode, PlayableItem, Playlist, Show, pick_image};
 use crate::app::App;
 use crate::i18n::gettext;
-use crate::model::{Action, DISCOVER_TERMS, Loadable, Page, RowContext};
+use crate::model::{Action, Loadable, Page, RowContext};
 use crate::theme::{self, Icon};
 
 use super::widgets::{self, TrackRow};
@@ -22,7 +22,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     ui.add_space(16.0);
 
     if app.settings.home.made_for_you.visible {
-        made_for_you(app, ui);
+        recently_added(app, ui);
     }
     recently_played(app, ui);
     podcasts(app, ui);
@@ -51,7 +51,7 @@ fn quick_access(app: &mut App, ui: &mut egui::Ui) {
         uri: app
             .user
             .as_ref()
-            .map(|user| format!("spotify:user:{}:collection", user.id)),
+            .map(|user| format!("jellyfin:user:{}:collection", user.id)),
         liked: true,
         owned_playlist: None,
     }];
@@ -189,62 +189,48 @@ fn quick_access(app: &mut App, ui: &mut egui::Ui) {
     }
 }
 
-fn made_for_you(app: &mut App, ui: &mut egui::Ui) {
+/// The albums added to the library most recently.
+fn recently_added(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
-    let mut playlists: Vec<Playlist> = Vec::new();
-    let mut loading = false;
-    let mut failed = false;
-    for term in DISCOVER_TERMS {
-        match app.home.discover.get(*term) {
-            Some(Loadable::Loaded(list)) => {
-                for playlist in list {
-                    let duplicate = playlists.iter().any(|existing| {
-                        existing.id == playlist.id
-                            || existing.name.eq_ignore_ascii_case(&playlist.name)
-                    });
-                    if !duplicate {
-                        playlists.push(playlist.clone());
-                    }
-                }
-            }
-            Some(Loadable::Loading) => loading = true,
-            Some(Loadable::Failed(_)) => failed = true,
-            _ => {}
+    let albums = match &app.home.latest_albums {
+        Loadable::Loaded(albums) if albums.is_empty() => return,
+        Loadable::Loaded(albums) => albums.clone(),
+        Loadable::NotLoaded => return,
+        Loadable::Loading => Vec::new(),
+        Loadable::Failed(_) => {
+            widgets::shelf(
+                ui,
+                &palette,
+                "recently-added",
+                &gettext(app.locale, "Recently added"),
+                |ui| {
+                    let message = gettext(app.locale, "Couldn't load this shelf");
+                    widgets::error_row(ui, app, &message, Some(Page::Home));
+                },
+            );
+            return;
         }
-    }
-    if playlists.is_empty() && !loading && !failed {
-        return;
-    }
+    };
     widgets::shelf(
         ui,
         &palette,
-        "made-for-you",
-        &gettext(app.locale, "Made for you"),
+        "recently-added",
+        &gettext(app.locale, "Recently added"),
         |ui| {
-            if playlists.is_empty() && loading {
+            if albums.is_empty() {
                 widgets::loading_row(ui, &palette, app.locale);
-            } else if playlists.is_empty() && failed {
-                let message = gettext(app.locale, "Couldn't load this shelf");
-                widgets::error_row(ui, app, &message, Some(Page::Home));
             }
-            for playlist in &playlists {
-                let subtitle = playlist
-                    .description
-                    .as_deref()
-                    .map(crate::util::strip_html)
-                    .filter(|d| !d.is_empty())
-                    .unwrap_or_else(|| {
-                        // Translators: {owner} is the name of the playlist's owner.
-                        gettext(app.locale, "By {owner}").replace("{owner}", playlist.owner_name())
-                    });
-                let playing_here = app.playing_context_uri().as_deref()
-                    == Some(playlist.uri.as_str())
+            for album in &albums {
+                let subtitle = crate::api::models::join_names(
+                    album.artists.iter().map(|artist| artist.name.as_str()),
+                );
+                let playing_here = app.playing_context_uri().as_deref() == Some(album.uri.as_str())
                     && app.believed_playing();
                 let card = widgets::card(
                     ui,
                     app,
-                    pick_image(&playlist.images, 640),
-                    &playlist.name,
+                    pick_image(&album.images, 640),
+                    &album.name,
                     &subtitle,
                     widgets::CardCover::square(playing_here),
                 );
@@ -253,7 +239,7 @@ fn made_for_you(app: &mut App, ui: &mut egui::Ui) {
                         app.actions.push(Action::TogglePlay);
                     } else {
                         app.actions.push(Action::PlayContext {
-                            uri: playlist.uri.clone(),
+                            uri: album.uri.clone(),
                             offset_uri: None,
                             offset_index: None,
                         });
@@ -261,20 +247,13 @@ fn made_for_you(app: &mut App, ui: &mut egui::Ui) {
                 }
                 if card.clicked {
                     app.actions
-                        .push(Action::Open(Page::Playlist(playlist.id.clone())));
+                        .push(Action::Open(Page::Album(album.id.clone())));
                 }
                 egui::Popup::context_menu(&card.response)
-                    .id(ui.make_persistent_id(("home-made_for_you-menu", &playlist.uri)))
+                    .id(ui.make_persistent_id(("home-recently-added-menu", &album.uri)))
                     .frame(widgets::menu_frame(&palette))
                     .show(|ui| {
-                        let owned = app.user_id().is_some_and(|id| playlist.owned_by(id));
-                        widgets::context_menu_items(
-                            ui,
-                            app,
-                            &playlist.uri,
-                            &playlist.name,
-                            owned.then_some(playlist),
-                        );
+                        widgets::context_menu_items(ui, app, &album.uri, &album.name, None);
                     });
             }
         },
@@ -698,7 +677,7 @@ mod tests {
     fn show(id: &str) -> Show {
         Show {
             id: id.into(),
-            uri: format!("spotify:show:{id}"),
+            uri: format!("jellyfin:show:{id}"),
             name: id.to_uppercase(),
             ..Show::default()
         }
@@ -707,7 +686,7 @@ mod tests {
     fn episode(id: &str, date: &str, played: Option<u32>, finished: bool) -> Episode {
         Episode {
             id: id.into(),
-            uri: format!("spotify:episode:{id}"),
+            uri: format!("jellyfin:episode:{id}"),
             duration_ms: 3_600_000,
             release_date: Some(date.into()),
             resume_point: Some(ResumePoint {

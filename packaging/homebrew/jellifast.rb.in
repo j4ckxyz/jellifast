@@ -1,0 +1,21 @@
+cask "jellifast" do
+  version "@VERSION@"
+  sha256 "@MACOS_SHA256@"
+
+  url "https://github.com/j4ckxyz/jellifast/releases/download/v#{version}/jellifast-v#{version}-macos-universal.dmg"
+  name "Jellifast"
+  desc "Native music player for Jellyfin"
+  homepage "https://github.com/j4ckxyz/jellifast"
+
+  livecheck do
+    url :url
+    strategy :github_latest
+  end
+
+  app "Jellifast.app"
+
+  zap trash: [
+    "~/Library/Application Support/io.github.j4ckxyz.jellifast",
+    "~/Library/Caches/io.github.j4ckxyz.jellifast",
+  ]
+end

@@ -88,7 +88,7 @@ fn recent(app: &mut App, ui: &mut egui::Ui) {
             ui,
             &palette,
             Icon::Search,
-            &gettext(app.locale, "Search Spotify"),
+            &gettext(app.locale, "Search your library"),
             &gettext(
                 app.locale,
                 "Find songs, artists, albums, playlists, and podcasts.",
@@ -391,7 +391,7 @@ fn top_result(
             )
             .clicked()
             {
-                if uri.starts_with("spotify:track:") {
+                if uri.starts_with("jellyfin:track:") {
                     app.actions.push(Action::PlayUris {
                         uris: vec![uri.clone()],
                         index: 0,

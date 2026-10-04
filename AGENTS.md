@@ -1,16 +1,18 @@
-# Spotifast agent guide
+# Jellifast agent guide
 
 Follow `CONTRIBUTING.md`; it is the canonical product and contribution policy.
 These instructions add implementation constraints for coding agents.
 
 ## Product boundaries
 
-- Keep Spotifast a small native Spotify client. Do not add a browser engine,
-  telemetry, a hosted backend, or alternate sources for Spotify audio.
-- Playback capabilities come from librespot. Do not advertise or implement a
-  capability merely because its name appears in a protobuf or enum. In
-  particular, do not pursue Spotify Lossless or DRM circumvention unless
-  lawful support first lands upstream.
+- Keep Jellifast a small native music player for Jellyfin. Do not add a
+  browser engine, telemetry, a hosted backend, or another source of audio than
+  the server the listener signed in to.
+- A control shows only what the server has something behind.
+  `docs/_reference/what-jellyfin-offers.md` lists which part of Jellyfin
+  stands behind each part of the interface, what is not there yet, and what
+  Jellyfin does not have. Read it before building or promising a
+  server-facing feature, and update it in the same change.
 - Do not broaden a task into adjacent features or a general refactor. Preserve
   existing user behaviour unless the task explicitly changes it.
 
@@ -18,47 +20,51 @@ These instructions add implementation constraints for coding agents.
 
 - `src/ui/` draws views and emits `Action`s. Apply actions after drawing in
   `src/app.rs`; do not mutate application state from inside a borrowed view.
-- Network and playback work belongs on the runtime in `src/backend.rs` or in
-  the player engine in `src/player.rs`, never as blocking work on the UI
-  thread.
+- Network work belongs on the runtime in `src/backend.rs`; decoding and the
+  play queue belong to the player thread in `src/player.rs`. Neither may block
+  the UI thread.
+- `src/api/jellyfin.rs` holds the server's response shapes and turns them into
+  the app's own `src/api/models.rs`; `src/api/client.rs` makes the requests.
+  The interface never sees a Jellyfin shape.
+- Songs, albums, artists and playlists are named `jellyfin:<kind>:<id>`
+  throughout the app. Favourite songs play as `jellyfin:user:<id>:collection`.
+- The access token travels in the `Authorization` header only, never in an
+  address, a log line, the settings file or the state files. The password is
+  sent once at sign-in and never stored.
 - Keep platform integrations behind target-specific modules or `cfg` blocks.
   A fix for one platform must keep the other two targets compiling.
 - Settings and state files must remain readable, backward compatible, and
-  atomically written. Never log credentials or authorization responses.
+  atomically written. Never log credentials or sign-in responses.
 - Prefer existing dependencies. Explain any new crate in `Cargo.toml` next to
   the dependency when the reason is not obvious.
 - For dependency fixes, use a maintainer-owned fork pinned to a commit and
   contribute the fix upstream. Use the fork until a release includes the fix;
   do not copy dependency source into this repository.
-- egui and winit come from forks shared with ZapFast, RekordFlash and TonePush
-  (crmne/egui apps-0.36, crmne/winit apps-0.30); move all their crates to a
-  new revision together. On Wayland, eframe from that fork paces frames by
-  the compositor's frame callbacks instead of a vsync swap, so a hidden window
-  cannot freeze the app (#266). Do not add a vsync decision of our own.
+- egui and winit come from forks (crmne/egui apps-0.36, crmne/winit
+  apps-0.30); move all their crates to a new revision together. On Wayland,
+  eframe from that fork paces frames by the compositor's frame callbacks
+  instead of a vsync swap, so a hidden window cannot freeze the app. Do not
+  add a vsync decision of our own.
 - The egui fork shapes right-to-left runs in their own direction but leaves
   them in logical order. Pass logical text to `crate::bidi`, which reorders
   the laid-out runs; never reorder the string before layout.
 
-Read `docs/_reference/how-it-connects.md` before changing authentication,
-Spotify requests, Connect, credential storage, or network behaviour. Read
-`docs/_reference/queue.md` before touching the queue: its rules are the
-contract, and the queue tests in `src/app.rs` enforce them. Read the
-nearby module tests before changing a state machine or API fallback.
+Read `docs/_reference/how-it-connects.md` before changing sign-in, server
+requests, playback, play reporting, credential storage, or network behaviour,
+and keep its request table true. Read `docs/_reference/queue.md` before
+touching the queue: its rules are the contract, and the queue tests in
+`src/app.rs` enforce them. Read the nearby module tests before changing a
+state machine.
 
-`docs/_reference/what-spotify-allows.md` lists what the Web API, the
-librespot session, and librespot playback each offer, and the requests
-none of them can serve (pins synchronised with Spotify, folder editing,
-Smart Shuffle, lossless, local files, and more), each with its reason.
-Before building or promising a Spotify-facing feature, and before answering
-an issue that asks for one, find it there. A request in the last section is
-answered with that reason and closed, not worked on; if the reason has
-lapsed because librespot or the Web API gained the capability, update the
-page in the same change.
+Changes to the client or the player are checked against a real server with
+`cargo run --no-default-features --example jellyfin_probe` (add `-- --play`
+for the player, at zero volume). It uses Jellyfin's public demo server unless
+`JELLYFIN_URL`, `JELLYFIN_USER` and `JELLYFIN_PASSWORD` are set. It only reads.
 
 The interface is optimistic, always. A control shows its result the
 moment it is used: a double-clicked song is the playing song, Next pops
 the queue's head, an added song has its row. The backend then makes it
-true and Spotify's state catches up behind; an answer that still tells
+true and the server's state catches up behind; an answer that still tells
 the story from before the user's action is stale, so hold the shown
 state and ask again rather than let the lagging answer undo what the
 user just did. Nothing the user did may ever flicker away and come back.
@@ -169,42 +175,9 @@ mise or mbx.
 
 ## Releases
 
-A release is not the tag alone. Do these in order:
-
-1. Change the `Cargo.toml` version, add the matching release to the Flatpak
-   metainfo, and update the lockfile with a build.
-   Refresh the `flake.nix` vendor hash when the lockfile changes, even when
-   only the package version changed. Verify `nix build .#default` locally or
-   in CI. Wait for every required CI job on the release commit before tagging.
-   Commit and push this before the tag so the binaries report the right
-   version. Include written notes in `packaging/release-notes/vVERSION.md`
-   so the release publishes the real description immediately.
-2. Push the `v*` tag, which triggers the release workflow. Wait for every
-   required artifact and `checksums.txt`, then verify the published written
-   notes, screenshot and download links. Never publish generated placeholder notes.
-3. A prerelease stops here. Keep the stable version current on the website,
-   Homebrew, and AUR. The prerelease remains available from GitHub's releases
-   page.
-4. For a stable release, only after the GitHub release exists, update
-   `docs/_config.yml` `spotifast_version` and
-   `docs/_data/versions.yml`. The selector carries only the latest stable
-   version: replace its version entry, make it `current`, and point it at
-   `/download/`. Do not retain older version entries; they remain available
-   through the Changelog link. Never make the download page point at files
-   that do not exist yet.
-5. Update the Homebrew cask in the maintainer's tap and the AUR package from
-   the release's `checksums.txt`. The packaging workflow handles configured
-   destinations when `PUBLISH_HOMEBREW` and `PUBLISH_AUR` are enabled. Otherwise
-   use the in-repository packaging CLI to prepare, review and publish them;
-   see `PACKAGING.md`. Native package validation remains required.
-
-Before writing release notes, read the previous two stable releases and match
-their style. Start with a short plain-language summary, use `New` and `Fixed`
-sections as applicable, lead each item with a bold user-facing result, credit
-contributors and reporters with the relevant issue or pull request numbers,
-include a `Thanks` section, and end with the full changelog link. Do not leave
-the generated notes in place or introduce a different section scheme for
-ordinary improvements.
-
-Skipping an applicable step ships a release that lies somewhere; the dropdown
-was forgotten once already.
+No release of Jellifast exists yet. The release, packaging and Flatpak
+workflows are inherited and still need the project's own signing identities,
+Homebrew tap and AUR packages before a tag is pushed; `flake.nix` needs its
+vendor hash refreshed whenever the lockfile changes. Do not tag a release
+until `PACKAGING.md` and `native-packages.yaml` describe destinations that
+exist. Written notes go in `packaging/release-notes/vVERSION.md`.

@@ -1166,7 +1166,7 @@ pub fn marquee_text(
         return notice.to_string();
     }
     let Some(now) = now else {
-        return "Spotifast".to_string();
+        return "Jellifast".to_string();
     };
     if let Some(fraction) = seek_preview
         && now.duration_ms > 0
@@ -1552,7 +1552,7 @@ mod tests {
         NowPlaying {
             local: true,
             device_name: None,
-            uri: "spotify:track:x".into(),
+            uri: "jellyfin:track:x".into(),
             id: None,
             title: title.into(),
             artists: Vec::new(),
@@ -1585,7 +1585,7 @@ mod tests {
         );
         assert_eq!(
             marquee_text(Locale::English, None, None, None, None, None),
-            "Spotifast"
+            "Jellifast"
         );
         let untitled = now("Episode 12", "", 0);
         assert_eq!(

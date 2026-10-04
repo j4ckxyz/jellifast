@@ -1,4 +1,4 @@
-//! Where Spotifast keeps its files.
+//! Where Jellifast keeps its files.
 //!
 //! Configuration, durable non-secret state, and disposable caches live in the
 //! platform's conventional directories. Spotify grants use the platform store;
@@ -17,11 +17,11 @@ pub struct AppDirs {
 
 impl AppDirs {
     pub fn discover() -> Self {
-        Self::for_name("spotifast")
+        Self::for_name("jellifast")
     }
 
     fn for_name(name: &str) -> Self {
-        let project = ProjectDirs::from("me", "paolino", name);
+        let project = ProjectDirs::from("io.github", "j4ckxyz", name);
         match project {
             Some(project) => Self {
                 config: project.config_dir().to_path_buf(),
@@ -81,7 +81,7 @@ impl AppDirs {
 
     /// The log of the current run, replaced at every start.
     pub fn log_file(&self) -> PathBuf {
-        self.state.join("spotifast.log")
+        self.state.join("jellifast.log")
     }
 
     /// Where a panic is recorded before the process dies of it.

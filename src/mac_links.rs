@@ -1,6 +1,6 @@
-//! Spotify links macOS hands the app.
+//! Links macOS hands the app.
 //!
-//! An app registered for the `spotify` scheme (`CFBundleURLTypes` in
+//! An app registered for the `jellifast` scheme (`CFBundleURLTypes` in
 //! `packaging/macos/Info.plist`) gets each link as an Apple Event, never on
 //! the command line: the one it was launched for as well as the ones that
 //! arrive while it runs. The handler here puts each on the running
@@ -47,10 +47,10 @@ mod mac_impl {
     define_class!(
         #[unsafe(super(NSObject))]
         #[thread_kind = MainThreadOnly]
-        #[name = "SpotifastLinkHandler"]
-        pub struct SpotifastLinkHandler;
+        #[name = "JellifastLinkHandler"]
+        pub struct JellifastLinkHandler;
 
-        impl SpotifastLinkHandler {
+        impl JellifastLinkHandler {
             #[unsafe(method(handleGetURLEvent:withReplyEvent:))]
             fn handle_get_url(
                 &self,
@@ -69,7 +69,7 @@ mod mac_impl {
 
     fn deliver(text: &str) {
         let Some(uri) = crate::link::parse(text) else {
-            log::warn!("not a Spotify link: {text}");
+            log::warn!("not a Jellifast link: {text}");
             return;
         };
         let Ok(sink) = SINK.lock() else {
@@ -96,8 +96,8 @@ mod mac_impl {
         if INSTALLED.swap(true, Ordering::SeqCst) {
             return;
         }
-        let handler: Retained<SpotifastLinkHandler> =
-            unsafe { msg_send![mtm.alloc::<SpotifastLinkHandler>(), init] };
+        let handler: Retained<JellifastLinkHandler> =
+            unsafe { msg_send![mtm.alloc::<JellifastLinkHandler>(), init] };
         let target: &NSObject = &handler;
         let manager = NSAppleEventManager::sharedAppleEventManager();
         // The typed binding for this call wants the Core Services crate for

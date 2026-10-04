@@ -1,25 +1,10 @@
-//! Spotify Web API client.
-
-use std::fmt;
+//! Jellyfin server client.
+//!
+//! `jellyfin` holds the server's response shapes and turns them into the
+//! app's own `models`; `client` makes the requests.
 
 pub mod client;
-pub mod gateway;
+pub mod jellyfin;
 pub mod models;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum ApiSource {
-    Shared,
-    Personal,
-}
-
-impl fmt::Display for ApiSource {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Shared => formatter.write_str("shared"),
-            Self::Personal => formatter.write_str("personal"),
-        }
-    }
-}
-
-pub use client::{ApiClient, ApiError, NetActivity, PlayRequest, TokenProvider, WebTokens};
-pub use gateway::{AccountId, ApiGateway, Operation, PlaylistAccess, PlaylistId, SessionState};
+pub use client::{ApiClient, ApiError, NetActivity, PlayRequest};

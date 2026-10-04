@@ -12,7 +12,6 @@ use crate::theme::{self, Icon, Palette};
 use super::widgets;
 
 const PLAYBACK_DIRTY_ID: &str = "playback-settings-dirty";
-pub(crate) const PERSONAL_APP_FOCUS_ID: &str = "focus-personal-app-setup";
 const SETTINGS_FILTER_ID: &str = "settings-filter";
 
 /// Whether a settings row matches the filter query (case-insensitive).
@@ -60,7 +59,7 @@ impl<'a> RowText<'a> {
 }
 
 /// The guide to writing a palette file for the themes folder.
-const THEMES_GUIDE_URL: &str = "https://spotifast.rocks/settings-and-files/#custom-themes";
+const THEMES_GUIDE_URL: &str = "https://github.com/j4ckxyz/jellifast/blob/main/docs/_reference/settings-and-files.md#custom-themes";
 
 fn section_matches(needle: &str, title: &str, rows: &[RowText<'_>]) -> bool {
     let needle = needle.trim().to_lowercase();
@@ -161,11 +160,13 @@ fn setting_slider<N: egui::emath::Numeric>(
     .inner
 }
 
-/// Forget the search text, so a flow that lands on a specific row (like
-/// the Personal App setup) always finds that row visible and focusable.
+/// Forget the search text, so a test that lands on a specific row always
+/// finds that row visible.
+#[cfg(test)]
 pub(crate) fn clear_search(ctx: &egui::Context) {
     ctx.data_mut(|data| data.remove::<String>(egui::Id::new(SETTINGS_FILTER_ID)));
 }
+
 const PROXY_DIRTY_ID: &str = "proxy-settings-dirty";
 
 fn section(
@@ -231,57 +232,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let mut any_visible = false;
     let open_folder = gettext(locale, "Open folder");
 
-    let wanted = app
-        .settings
-        .web_client_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|id| !id.is_empty())
-        .map(str::to_string);
-    let in_use = wanted
-        .as_deref()
-        .is_some_and(|wanted| app.web_app.as_deref() == Some(wanted));
     let account = gettext(locale, "Account");
     let sign_out = gettext(locale, "Sign out");
-    let account_rows = [
-        RowText::new(
-            gettext(locale, "Personal Spotify app"),
-            gettext(
-                locale,
-                "Use a personal Development Mode app for a separate API quota. The shared app stays active.",
-            ),
-        ),
-        RowText::new(
-            gettext(locale, "Create an app"),
-            gettext(
-                locale,
-                "Create one for free in Spotify's developer dashboard.",
-            ),
-        )
-        .when(!in_use),
-        RowText::new(
-            gettext(locale, "Personal app ready"),
-            gettext(
-                locale,
-                "Supported requests use your app. Other requests use the shared app.",
-            ),
-        )
-        .when(in_use),
-        RowText::new(
-            gettext(locale, "Authorize your personal app"),
-            gettext(
-                locale,
-                "Spotify opens in your browser to verify the account.",
-            ),
-        )
-        .when(!in_use && wanted.is_some()),
-        RowText::new(
-            gettext(locale, "Remove personal app"),
-            gettext(locale, "Shared access remains signed in."),
-        )
-        .when(!in_use && wanted.is_none() && app.web_app.is_some()),
-        RowText::new(sign_out.clone(), account.clone()),
-    ];
+    let account_rows = [RowText::new(sign_out.clone(), account.clone())];
     if section_matches(&needle, &account, &account_rows) {
         any_visible = true;
         section(ui, &palette, &account, |ui| {
@@ -300,33 +253,12 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             .map(|user| user.name().to_string())
                             .unwrap_or_default();
                         theme::text(ui, name, theme::semibold(16.0), palette.text);
-                        let product = app
-                            .user
-                            .as_ref()
-                            .and_then(|user| user.product.clone())
-                            .map(|product| match product.as_str() {
-                                "premium" => "Spotify Premium".to_string(),
-                                "free" | "open" => {
-                                    gettext(locale, "Spotify Free, local playback needs Premium")
-                                        .into_owned()
-                                }
-                                other => other.to_string(),
-                            })
-                            .unwrap_or_default();
-                        theme::text(ui, product, theme::regular(13.0), palette.secondary);
-                        if let Some(username) =
-                            app.local.connected.then(|| app.local.username.clone())
-                            && !username.is_empty()
-                        {
-                            theme::text(
-                                ui,
-                                // Translators: {username} is the Spotify account's user name.
-                                gettext(locale, "Connected as {username}")
-                                    .replace("{username}", &username),
-                                theme::regular(12.0),
-                                palette.dim,
-                            );
-                        }
+                        theme::text(
+                            ui,
+                            app.settings.server.clone(),
+                            theme::regular(13.0),
+                            palette.secondary,
+                        );
                     });
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         if theme::pill_button(ui, &palette, &sign_out, false).clicked() {
@@ -336,105 +268,21 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 });
                 ui.add_space(10.0);
             }
-            let mut client_id = app.settings.web_client_id.clone().unwrap_or_default();
-            filtered_row(ui, &palette, &needle, &account, &account_rows[0], |ui| {
-                let response = Frame::new()
-                    .fill(palette.surface)
-                    .corner_radius(CornerRadius::same(6))
-                    .inner_margin(Margin::symmetric(10, 6))
-                    .show(ui, |ui| {
-                        widgets::text_edit(
-                            ui,
-                            app.locale,
-                            egui::TextEdit::singleline(&mut client_id)
-                                .id(egui::Id::new("personal-web-client-id"))
-                                .hint_text(
-                                    egui::RichText::new(gettext(locale, "Client ID"))
-                                        .color(palette.dim),
-                                )
-                                .font(theme::regular(13.0))
-                                .frame(egui::Frame::NONE)
-                                .desired_width(200.0),
-                        )
-                    })
-                    .inner;
-                if ui
-                    .data_mut(|data| data.remove_temp::<bool>(egui::Id::new(PERSONAL_APP_FOCUS_ID)))
-                    .unwrap_or(false)
-                {
-                    response.scroll_to_me(Some(Align::Center));
-                    response.request_focus();
-                }
-                if response.changed() {
-                    let trimmed = client_id.trim().to_string();
-                    app.settings.web_client_id = (!trimmed.is_empty()).then_some(trimmed);
-                    changed = true;
-                }
-            });
-            filtered_row(ui, &palette, &needle, &account, &account_rows[1], |ui| {
-                if theme::pill_button(ui, &palette, &gettext(locale, "Setup guide"), false)
-                    .clicked()
-                {
-                    app.actions.push(Action::OpenUrl(
-                        "https://spotifast.rocks/make-it-even-faster/#make-a-spotify-app".into(),
-                    ));
-                }
-            });
-            if in_use {
-                filtered_row(ui, &palette, &needle, &account, &account_rows[2], |ui| {
-                    if theme::pill_button(ui, &palette, &gettext(locale, "Remove"), false).clicked()
-                    {
-                        app.settings.web_client_id = None;
-                        app.actions.push(Action::ConfigurePersonalWebApp);
-                    }
-                });
-            } else if wanted.is_some() {
-                filtered_row(ui, &palette, &needle, &account, &account_rows[3], |ui| {
-                    if theme::pill_button(ui, &palette, &gettext(locale, "Authorize"), true)
-                        .clicked()
-                    {
-                        app.actions.push(Action::ConfigurePersonalWebApp);
-                    }
-                });
-            } else if app.web_app.is_some() {
-                filtered_row(ui, &palette, &needle, &account, &account_rows[4], |ui| {
-                    if theme::pill_button(ui, &palette, &gettext(locale, "Remove"), false).clicked()
-                    {
-                        app.actions.push(Action::ConfigurePersonalWebApp);
-                    }
-                });
-            }
         });
     }
 
-    let (status, detail, action) = match &app.local_playback {
+    let (status, detail) = match &app.local_playback {
         crate::backend::LocalPlayback::Ready { .. } => (
             pgettext(locale, "playback status", "Ready"),
-            gettext(locale, "This computer is a Spotify Connect device."),
-            None,
-        ),
-        crate::backend::LocalPlayback::Authorizing => (
-            pgettext(locale, "playback status", "Setting up"),
-            gettext(locale, "Finish authorizing in your browser."),
-            None,
-        ),
-        crate::backend::LocalPlayback::Connecting => (
-            pgettext(locale, "playback status", "Connecting"),
-            gettext(locale, "Connecting to Spotify…"),
-            None,
+            gettext(locale, "Music plays on this computer."),
         ),
         crate::backend::LocalPlayback::Failed(message) => (
             pgettext(locale, "playback status", "Unavailable"),
             message.clone().into(),
-            Some(gettext(locale, "Try again")),
         ),
         crate::backend::LocalPlayback::Unavailable => (
             pgettext(locale, "playback status", "Not set up"),
-            gettext(
-                locale,
-                "Requires Spotify Premium and a one-time browser sign-in.",
-            ),
-            Some(gettext(locale, "Enable playback here")),
+            gettext(locale, "Sign in to a Jellyfin server to play music."),
         ),
     };
     let playback = gettext(locale, "Playback on this computer");
@@ -455,11 +303,14 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         ),
         RowText::new(
             gettext(locale, "Device name"),
-            gettext(locale, "How this computer appears in Spotify Connect."),
+            gettext(locale, "How this computer appears in the server's device list."),
         ),
         RowText::new(
             gettext(locale, "Audio quality"),
-            gettext(locale, "Higher bitrates use more data and cache space."),
+            gettext(
+                locale,
+                "Original plays every file as it is. A limit has the server convert larger files.",
+            ),
         ),
         RowText::new(
             normalize_volume.clone(),
@@ -478,11 +329,11 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             super::keys::platform_shortcut(
                 &gettext(
                     locale,
-                    "Spotifast hides to the system tray. Quit from the tray menu or with Ctrl+Q.",
+                    "Jellifast hides to the system tray. Quit from the tray menu or with Ctrl+Q.",
                 ),
                 &gettext(
                     locale,
-                    "Spotifast hides to the system tray. Quit from the tray menu or with Cmd+Q.",
+                    "Jellifast hides to the system tray. Quit from the tray menu or with Cmd+Q.",
                 ),
             )
             .to_owned(),
@@ -491,14 +342,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             update_checks.clone(),
             gettext(locale, "Checks GitHub once a day. No personal data is sent."),
         ),
-        RowText::new(
-            gettext(locale, "Audio output"),
-            gettext(
-                locale,
-                "PulseAudio also covers PipeWire. Rodio talks to ALSA directly.",
-            ),
-        )
-        .when(cfg!(target_os = "linux")),
+        // The output has one backend on every platform; the row that chose
+        // between two is gone, and its place keeps the others' numbers.
+        RowText::new("", "").when(false),
         RowText::new(
             gettext(locale, "Output buffer"),
             gettext(
@@ -533,16 +379,12 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         any_visible = true;
         section(ui, &palette, &playback, |ui| {
             filtered_row(ui, &palette, &needle, &playback, &playback_rows[0], |ui| {
-                if let Some(label) = action {
-                    if theme::pill_button(ui, &palette, &label, true).clicked() {
-                        app.actions.push(Action::EnablePlayback);
-                    }
-                } else if app.local_ready
+                if app.is_connected()
                     && theme::soft_button(
                         ui,
                         &palette,
                         Some(Icon::Refresh),
-                        &gettext(locale, "Reconnect"),
+                        &gettext(locale, "Restart"),
                         false,
                     )
                     .clicked()
@@ -571,12 +413,13 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     playback_dirty = true;
                 }
             });
-            // Normal to Very high, left to right when side by side and top
-            // to bottom in a column.
+            // Lowest to original, left to right when side by side and top
+            // to bottom in a column. Zero stands for no limit.
             let choices = [
-                (96u16, gettext(locale, "Normal · 96 kbps")),
-                (160, gettext(locale, "High · 160 kbps")),
-                (320, gettext(locale, "Very high · 320 kbps")),
+                (96u16, gettext(locale, "96 kbps")),
+                (160, gettext(locale, "160 kbps")),
+                (320, gettext(locale, "320 kbps")),
+                (0, gettext(locale, "Original")),
             ];
             let choice_gap = 6.0;
             let choices_width = choices
@@ -701,32 +544,6 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     changed = true;
                 }
             });
-            if cfg!(target_os = "linux") {
-                filtered_row(ui, &palette, &needle, &playback, &playback_rows[8], |ui| {
-                    let current = app
-                        .settings
-                        .platform_backend()
-                        .unwrap_or_else(|| "rodio".into());
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 6.0;
-                        for backend in ["rodio", "pulseaudio"] {
-                            let label = if backend == "pulseaudio" {
-                                "PulseAudio / PipeWire"
-                            } else {
-                                "ALSA (rodio)"
-                            };
-                            if theme::soft_button(ui, &palette, None, label, current == backend)
-                                .clicked()
-                                && current != backend
-                            {
-                                app.settings.audio_backend = Some(backend.to_string());
-                                changed = true;
-                                playback_dirty = true;
-                            }
-                        }
-                    });
-                });
-            }
             #[cfg(windows)]
             filtered_row(ui, &palette, &needle, &playback, &playback_rows[9], |ui| {
                 ui.horizontal(|ui| {
@@ -871,7 +688,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             custom_titlebar.clone(),
             gettext(
                 locale,
-                "Draw Spotifast's own title bar and window buttons instead of the standard Windows ones.",
+                "Draw Jellifast's own title bar and window buttons instead of the standard Windows ones.",
             ),
         )
         .when(app.windows_controls_visible()),
@@ -1368,7 +1185,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 // the mini player opens.
                 const RANDOM: usize = usize::MAX;
                 let random = gettext(locale, "Random");
-                let mut options: Vec<(usize, &str)> = vec![(RANDOM, &random), (0, "Spotifast")];
+                let mut options: Vec<(usize, &str)> = vec![(RANDOM, &random), (0, "Jellifast")];
                 options.extend(
                     choices
                         .iter()
@@ -1402,7 +1219,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     let label = options
                         .iter()
                         .find(|(value, _)| *value == showing)
-                        .map_or("Spotifast", |(_, label)| label);
+                        .map_or("Jellifast", |(_, label)| label);
                     theme::subtle(
                         ui,
                         &palette,
@@ -1483,20 +1300,20 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 0 => gettext(
                     locale,
                     // Translators: {folder} is the path of the MilkDrop presets folder.
-                    "None yet in {folder}. Add .milk files here. Spotifast downloads presets when MilkDrop first opens with an empty folder.",
+                    "None yet in {folder}. Add .milk files here. Jellifast downloads presets when MilkDrop first opens with an empty folder.",
                 )
                 .replace("{folder}", &folder),
                 1 => gettext(
                     locale,
                     // Translators: {folder} is the path of the MilkDrop presets folder.
-                    "One preset in {folder}. Add .milk files here. Spotifast downloads presets when MilkDrop first opens with an empty folder.",
+                    "One preset in {folder}. Add .milk files here. Jellifast downloads presets when MilkDrop first opens with an empty folder.",
                 )
                 .replace("{folder}", &folder),
                 n => ngettext(
                     locale,
                     // Translators: {count} is the number of presets, {folder} the path of the MilkDrop presets folder.
-                    "{count} preset in {folder}. Add .milk files here. Spotifast downloads presets when MilkDrop first opens with an empty folder.",
-                    "{count} presets in {folder}. Add .milk files here. Spotifast downloads presets when MilkDrop first opens with an empty folder.",
+                    "{count} preset in {folder}. Add .milk files here. Jellifast downloads presets when MilkDrop first opens with an empty folder.",
+                    "{count} presets in {folder}. Add .milk files here. Jellifast downloads presets when MilkDrop first opens with an empty folder.",
                     u32::try_from(n).unwrap_or(u32::MAX),
                 )
                 .replace("{count}", &n.to_string())
@@ -1849,7 +1666,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let about = gettext(locale, "About");
     let built_with = gettext(
         locale,
-        "Built with Rust, egui, and librespot. Not affiliated with Spotify.",
+        "Built with Rust, egui, and Symphonia. Not affiliated with the Jellyfin project.",
     );
     let check_for_updates = gettext(locale, "Check for updates");
     let checking = gettext(locale, "Checking…");
@@ -1857,7 +1674,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let source_code = gettext(locale, "Source code");
     let about_rows = [
         RowText::new(
-            format!("Spotifast {}", env!("CARGO_PKG_VERSION")),
+            format!("Jellifast {}", env!("CARGO_PKG_VERSION")),
             built_with.clone(),
         ),
         RowText::new(
@@ -1874,7 +1691,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.vertical(|ui| {
                     theme::text(
                         ui,
-                        format!("Spotifast {}", env!("CARGO_PKG_VERSION")),
+                        format!("Jellifast {}", env!("CARGO_PKG_VERSION")),
                         theme::semibold(15.0),
                         palette.text,
                     );

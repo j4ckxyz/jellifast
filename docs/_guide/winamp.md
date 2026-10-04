@@ -3,6 +3,10 @@ title: The Winamp Mini Player
 description: Use classic Winamp 2 skins with an analyser, equalizer, and playlist.
 nav_order: 4
 ---
+> Inherited from the project Jellifast was forked from and adapted to Jellyfin.
+> "Since 0.x" notes refer to that project's releases. See
+> [What Jellyfin Offers](../_reference/what-jellyfin-offers.md) for what differs.
+
 
 Open the mini player with Ctrl+M (Cmd+Shift+M on macOS), the shrink button, or
 **Switch to it** in Settings. It supports classic Winamp 2 `.wsz` skins. Find
@@ -22,14 +26,14 @@ Choose **Random**, first in that list, to get a different skin each time you
 switch to the mini player, never the same one twice in a row. Settings says
 which skin it picked, and choosing a skin yourself turns Random off.
 
-You can also use an unpacked skin folder. Spotifast finds skin files inside
+You can also use an unpacked skin folder. Jellifast finds skin files inside
 its subfolders, up to eight folders deep, so you do not need to move them all
 into one folder.
 
 Right-click the title bar, or click **O**, to choose a size from 1x to 4x.
 Each size keeps the classic pixels sharp. The same menu can keep the player
 above other windows. **D** toggles double size and **A** toggles always-on-top.
-Spotifast remembers the window position where your desktop allows it.
+Jellifast remembers the window position where your desktop allows it.
 
 Skins can have transparent areas and shapes other than rectangles. Modern
 Winamp 3 and 5 skin formats are not supported; choose classic Winamp 2 skins.
@@ -75,11 +79,11 @@ drag the lower-right corner to resize the window. Use X or **PL** to close it.
 - **LIST OPTS** starts one of your playlists or saves the queue as a new one.
 - **REM → Remove all** clears your queued songs when this computer is playing.
 
-Spotify does not let third-party apps remove one song from the queue. Notices
+the server does not let third-party apps remove one song from the queue. Notices
 from the main window scroll through the mini player's text display.
 
 ## Equalizer
 
 **EQ** opens the ten-band equalizer. It affects playback on this computer, not
-other Spotify Connect devices. The preamp ranges from -12 to 12 dB. **AUTO**
+other players on the server. The preamp ranges from -12 to 12 dB. **AUTO**
 resets all bands. The same controls and presets are in Settings.

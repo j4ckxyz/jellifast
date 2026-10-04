@@ -1,10 +1,8 @@
-//! Audio output for local playback.
+//! Audio output for playback on this computer.
 //!
-//! librespot's rodio sink panics if no output device is available. Release
-//! builds abort on that panic. This sink opens the device when playback starts
-//! and reports a device it cannot open through the UI, from the first write
-//! (see `start`). Spotifast can then remain available as a Connect remote
-//! until an output appears.
+//! The sink opens the device when playback starts and reports a device it
+//! cannot open through the UI, from the first write (see `start`), instead
+//! of failing the player. Playback can then start once an output appears.
 //!
 //! fastframe-audio owns the device stream: it pauses with playback, so a
 //! paused player costs no audio work (#636), follows the system's default
@@ -15,13 +13,10 @@ use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::audio::{
+    AudioPacket, Converter, NUM_CHANNELS, SAMPLE_RATE, Sink, SinkError, SinkResult, VolumeGetter,
+};
 use fastframe_audio::{Buffer, BufferSize, Maintained, OutputOptions, Render};
-use librespot_playback::audio_backend::{Sink, SinkError, SinkResult};
-use librespot_playback::convert::Converter;
-use librespot_playback::decoder::AudioPacket;
-use librespot_playback::mixer::VolumeGetter;
-use librespot_playback::player::PlayerEvent;
-use librespot_playback::{NUM_CHANNELS, SAMPLE_RATE};
 use rodio::Source;
 
 use crate::resample::Resampler;
@@ -64,11 +59,11 @@ pub const BUFFER_MS_RANGE: std::ops::RangeInclusive<u32> = 20..=500;
 
 /// Coordinates an explicit track replacement with the audio thread.
 ///
-/// librespot deliberately leaves a gapless sink running between tracks. That
-/// is right when one track reaches its end, but an explicit skip otherwise
-/// leaves the old queued audio in front of the replacement. The old signal is
-/// faded on rodio's output thread before its queue is discarded; writes stay
-/// gated until librespot reports that the replacement track is loaded.
+/// The player leaves a gapless sink running between tracks. That is right
+/// when one track reaches its end, but an explicit skip otherwise leaves the
+/// old queued audio in front of the replacement. The old signal is faded on
+/// rodio's output thread before its queue is discarded; writes stay gated
+/// until the player reports that the replacement track is loaded.
 /// A confirmed seek also discards queued audio, without gating packets from
 /// the decoder that has already moved to the requested position.
 pub struct AudioControl {
@@ -82,6 +77,8 @@ pub struct AudioControl {
 struct AudioTarget {
     sink: Weak<rodio::Sink>,
     envelope: Option<Arc<Envelope>>,
+    /// The queue the output is playing from, and the rate it runs at.
+    queued: Option<(Arc<Queued>, u32)>,
 }
 
 impl AudioControl {
@@ -94,25 +91,16 @@ impl AudioControl {
         })
     }
 
-    /// Follows confirmed decoder transitions, including seeks requested by
-    /// another Spotify client. Natural track changes retain gapless audio.
-    pub(crate) fn handle_player_event(&self, event: &PlayerEvent) {
-        match event {
-            PlayerEvent::TrackChanged { .. } => self.track_changed(),
-            PlayerEvent::Seeked { .. } => {
-                let target = self.target.lock().unwrap_or_else(PoisonError::into_inner);
-                if let Some(sink) = target.sink.upgrade() {
-                    sink.stop();
-                }
-                self.reset_output.store(true, Ordering::SeqCst);
-                // Previous can rewind the current track after interrupting
-                // it. Release that gate, but never close it for a seek:
-                // the decoder is already sending audio from the new position.
-                self.track_changed();
-            }
-            PlayerEvent::Stopped { .. } => self.stopped(),
-            _ => {}
+    /// Discards audio queued from before a seek. The decoder has already
+    /// moved to the requested position, so writes are never gated here.
+    pub fn seeked(&self) {
+        let target = self.target.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(sink) = target.sink.upgrade() {
+            sink.stop();
         }
+        self.reset_output.store(true, Ordering::SeqCst);
+        drop(target);
+        self.track_changed();
     }
 
     /// Fades and discards the current output before a user-requested track
@@ -140,7 +128,7 @@ impl AudioControl {
         self.reset_output.store(true, Ordering::SeqCst);
     }
 
-    /// Opens the write gate once librespot has left the old decoder behind.
+    /// Opens the write gate once the player has left the old decoder behind.
     pub fn track_changed(&self) {
         self.waiting_for_track.store(false, Ordering::SeqCst);
     }
@@ -162,6 +150,23 @@ impl AudioControl {
         let mut target = self.target.lock().unwrap_or_else(PoisonError::into_inner);
         target.sink = Arc::downgrade(sink);
         target.envelope = Some(envelope);
+    }
+
+    fn note_queue(&self, queued: &Arc<Queued>, sample_rate: u32) {
+        let mut target = self.target.lock().unwrap_or_else(PoisonError::into_inner);
+        target.queued = Some((Arc::clone(queued), sample_rate));
+    }
+
+    /// How much decoded sound is waiting in the output's queue: what the
+    /// decoder is ahead of the listener by.
+    pub fn buffered(&self) -> Duration {
+        let target = self.target.lock().unwrap_or_else(PoisonError::into_inner);
+        match &target.queued {
+            Some((queued, sample_rate)) if *sample_rate > 0 => {
+                Duration::from_secs_f64(queued.frames() as f64 / f64::from(*sample_rate))
+            }
+            _ => Duration::ZERO,
+        }
     }
 }
 
@@ -394,7 +399,7 @@ struct Output {
     mixer: rodio::mixer::Mixer,
     sink: Arc<rodio::Sink>,
     /// The rate the mixer runs at, and the converter to it when that is
-    /// not Spotify's.
+    /// not the pipeline's.
     sample_rate: u32,
     resampler: Option<Resampler>,
     envelope: Arc<Envelope>,
@@ -427,6 +432,7 @@ impl Output {
         // The first sound has silence to come up from instead of a hard edge.
         self.transport = Envelope::closed(sample_rate, TRANSPORT_FADE);
         self.queued = Queued::new();
+        control.note_queue(&self.queued, sample_rate);
         self.fed = false;
         self.last_write = None;
     }
@@ -466,7 +472,7 @@ impl Output {
     }
 }
 
-/// The converter from Spotify's rate to `sample_rate`, when they differ.
+/// The converter from the pipeline's rate to `sample_rate`, when they differ.
 fn converter_to(sample_rate: u32) -> Option<Resampler> {
     let resampler = Resampler::new(SAMPLE_RATE, sample_rate, NUM_CHANNELS as usize);
     if resampler.is_some() {
@@ -585,12 +591,8 @@ impl Sink for RodioSink {
     /// Never fails: an output that cannot open is reported by the first
     /// `write` instead (#623).
     ///
-    /// librespot starts the sink from inside its playing loop and, when
-    /// `start` fails, pauses and then carries on as if it were still
-    /// playing. It finds itself paused, calls that an invalid state and
-    /// exits the process. A failed `write` pauses too, but at a point
-    /// where librespot expects it, so playback stops with a message and
-    /// the app stays up as a Connect remote.
+    /// A failed `write` is where the player expects an output that cannot
+    /// open: playback stops with a message and the app stays up.
     fn start(&mut self) -> SinkResult<()> {
         take_precedence();
         if let Err(error) = self.open_if_needed() {
@@ -605,7 +607,7 @@ impl Sink for RodioSink {
         Ok(())
     }
 
-    /// Never fails: librespot exits the process when a sink cannot stop.
+    /// Never fails: there is nothing the player could do about it.
     fn stop(&mut self) -> SinkResult<()> {
         if let Some(output) = &mut self.output {
             // The drain below plays the queue out, so the ramp is cut to
@@ -633,10 +635,10 @@ impl Sink for RodioSink {
             .samples()
             .map_err(|error| SinkError::OnWrite(error.to_string()))?;
         if self.control.waiting_for_track() {
-            // Muting must not remove decoder backpressure. Otherwise cached
-            // audio races to EndOfTrack while Connect is still handling the
-            // replacement load, and that old event can skip the chosen song.
-            // Pace one discarded packet, then let librespot process commands.
+            // Muting must not remove decoder backpressure. Otherwise buffered
+            // audio races to the end of the track while the replacement is
+            // still loading, and that old ending can skip the chosen song.
+            // Pace one discarded packet, then let the player process commands.
             let frames = samples.len() / NUM_CHANNELS as usize;
             thread::sleep(Duration::from_secs_f64(frames as f64 / SAMPLE_RATE as f64));
             return Ok(());
@@ -653,6 +655,7 @@ impl Sink for RodioSink {
             output.sink = sink;
             output.envelope = envelope;
             output.queued = Queued::new();
+            self.control.note_queue(&output.queued, output.sample_rate);
             output.resampler =
                 Resampler::new(SAMPLE_RATE, output.sample_rate, NUM_CHANNELS as usize);
             output.fed = false;
@@ -747,7 +750,7 @@ impl From<fastframe_audio::OpenError> for OpenError {
     }
 }
 
-/// What the output asks of the device: Spotify's stereo 44.1 kHz first, so
+/// What the output asks of the device: the pipeline's stereo 44.1 kHz first, so
 /// nothing is converted, then whatever the device takes. A named device
 /// that has gone falls back to the default. The fixed buffer addresses
 /// Windows shared-mode underruns (#88); CoreAudio, ALSA, PulseAudio and
@@ -823,10 +826,10 @@ mod tests {
         assert_eq!(buffer(100_000), fixed(u64::from(*BUFFER_MS_RANGE.end())));
     }
 
-    /// Spotify's own format is asked for first, so nothing is converted, and
+    /// The pipeline's own format is asked for first, so nothing is converted, and
     /// a blank device name means the system's default.
     #[test]
-    fn the_output_asks_for_spotifys_format_on_the_chosen_device() {
+    fn the_output_asks_for_the_pipeline_format_on_the_chosen_device() {
         let options = output_options(Some("USB DAC"), DEFAULT_BUFFER_MS);
         assert_eq!(
             options.device,
@@ -881,7 +884,7 @@ mod tests {
         let mut sink = RodioSink::new(
             Some("no such device".into()),
             Arc::new(move |message| *store.lock().unwrap() = Some(message)),
-            Box::new(librespot_playback::mixer::NoOpVolume),
+            Box::new(crate::audio::NoOpVolume),
             DEFAULT_BUFFER_MS,
             AudioControl::new(DEFAULT_BUFFER_MS),
         );
@@ -903,7 +906,7 @@ mod tests {
         let mut sink = RodioSink::new(
             None,
             Arc::new(|_| {}),
-            Box::new(librespot_playback::mixer::NoOpVolume),
+            Box::new(crate::audio::NoOpVolume),
             DEFAULT_BUFFER_MS,
             AudioControl::new(DEFAULT_BUFFER_MS),
         );
@@ -916,7 +919,7 @@ mod tests {
         if running(&sink).is_none() {
             return;
         }
-        let mut converter = Converter::new(None);
+        let mut converter = Converter;
         // Silence, so a test run plays nothing on the speakers.
         let packet = || AudioPacket::Samples(vec![0.0; 441 * NUM_CHANNELS as usize]);
         sink.write(packet(), &mut converter).unwrap();
@@ -939,7 +942,7 @@ mod tests {
         Err(OpenError::NoDevice)
     }
 
-    /// #623: a PC with no output at all. librespot exits the process when
+    /// A PC with no output at all. The player must not go down when
     /// `start` fails from its playing loop, but pauses cleanly when `write`
     /// fails, so the failure has to surface from `write`, reported to the
     /// interface once per attempt to play.
@@ -952,16 +955,16 @@ mod tests {
             ..RodioSink::new(
                 None,
                 Arc::new(move |message| store.lock().unwrap().push(message)),
-                Box::new(librespot_playback::mixer::NoOpVolume),
+                Box::new(crate::audio::NoOpVolume),
                 DEFAULT_BUFFER_MS,
                 AudioControl::new(DEFAULT_BUFFER_MS),
             )
         };
-        let mut converter = Converter::new(None);
+        let mut converter = Converter;
         let packet = || AudioPacket::Samples(vec![0.0; 441 * NUM_CHANNELS as usize]);
 
         for attempt in 1..=2 {
-            assert!(sink.start().is_ok(), "librespot exits when start fails");
+            assert!(sink.start().is_ok(), "start never fails");
             assert_eq!(reported.lock().unwrap().len(), attempt - 1);
 
             let Err(SinkError::ConnectionRefused(message)) = sink.write(packet(), &mut converter)
@@ -972,7 +975,7 @@ mod tests {
             assert_eq!(reported.lock().unwrap().len(), attempt);
             assert_eq!(reported.lock().unwrap().last().unwrap(), NO_DEVICE);
 
-            // librespot pauses on the failed write, which stops the sink.
+            // The player pauses on the failed write, which stops the sink.
             assert!(sink.stop().is_ok());
         }
     }
@@ -1037,11 +1040,11 @@ mod tests {
         let mut sink = RodioSink::new(
             None,
             Arc::new(|error| panic!("no audio device should be opened: {error}")),
-            Box::new(librespot_playback::mixer::NoOpVolume),
+            Box::new(crate::audio::NoOpVolume),
             DEFAULT_BUFFER_MS,
             control,
         );
-        let mut converter = Converter::new(None);
+        let mut converter = Converter;
         let frames = SAMPLE_RATE as usize / 100;
         let started = Instant::now();
         for _ in 0..4 {
@@ -1069,12 +1072,7 @@ mod tests {
         sink.append(chunk(500, &interrupt, &transport, &queued));
         assert_eq!(output.next(), Some(1.0));
 
-        control.handle_player_event(&PlayerEvent::Seeked {
-            play_request_id: 1,
-            track_id: librespot_core::SpotifyUri::from_uri("spotify:track:14XWXWv5FoCbFzLksawpEe")
-                .unwrap(),
-            position_ms: 90_000,
-        });
+        control.seeked();
 
         // Rodio checks stop every 5 ms of output. After that, none of the
         // half-second of sound from before the seek may still play.
@@ -1089,9 +1087,7 @@ mod tests {
     }
 
     #[test]
-    fn track_changes_and_position_updates_preserve_gapless_queued_audio() {
-        use librespot_metadata::audio::item::{AudioItem, UniqueFields};
-
+    fn a_natural_track_change_preserves_gapless_queued_audio() {
         let control = AudioControl::new(DEFAULT_BUFFER_MS);
         let (sink, mut output) = rodio::Sink::new();
         let sink = Arc::new(sink);
@@ -1099,47 +1095,9 @@ mod tests {
         control.register(&sink, Arc::clone(&interrupt));
         sink.append(chunk(500, &interrupt, &transport, &Queued::new()));
         assert_eq!(output.next(), Some(1.0));
-        let track_id =
-            librespot_core::SpotifyUri::from_uri("spotify:track:14XWXWv5FoCbFzLksawpEe").unwrap();
-        let item = AudioItem {
-            track_id: track_id.clone(),
-            uri: track_id.to_uri().unwrap(),
-            files: Default::default(),
-            name: "Next song".into(),
-            covers: vec![],
-            language: vec![],
-            duration_ms: 200_000,
-            is_explicit: false,
-            availability: Ok(()),
-            alternatives: None,
-            unique_fields: UniqueFields::Track {
-                artists: Default::default(),
-                album: "Album".into(),
-                album_artists: vec![],
-                popularity: 0,
-                number: 1,
-                disc_number: 1,
-            },
-        };
-        for event in [
-            PlayerEvent::TrackChanged {
-                audio_item: Box::new(item),
-            },
-            PlayerEvent::PositionCorrection {
-                play_request_id: 1,
-                track_id: track_id.clone(),
-                position_ms: 100,
-            },
-            PlayerEvent::PositionChanged {
-                play_request_id: 1,
-                track_id,
-                position_ms: 200,
-            },
-        ] {
-            control.handle_player_event(&event);
-            assert!(output.by_ref().take(100).all(|sample| sample == 1.0));
-            assert!(!control.take_reset());
-        }
+        control.track_changed();
+        assert!(output.by_ref().take(100).all(|sample| sample == 1.0));
+        assert!(!control.take_reset());
     }
 
     #[test]
@@ -1148,12 +1106,7 @@ mod tests {
         control.interrupt();
         assert!(control.waiting_for_track());
 
-        control.handle_player_event(&PlayerEvent::Seeked {
-            play_request_id: 1,
-            track_id: librespot_core::SpotifyUri::from_uri("spotify:track:14XWXWv5FoCbFzLksawpEe")
-                .unwrap(),
-            position_ms: 0,
-        });
+        control.seeked();
         assert!(!control.waiting_for_track());
         assert!(control.take_reset());
     }

@@ -588,8 +588,8 @@ pub struct HomeData {
     pub top_songs_loading: bool,
     pub top_songs_complete: bool,
     pub recommendations: Loadable<Vec<Track>>,
-    pub discover: HashMap<String, Loadable<Vec<Playlist>>>,
-    pub discover_pending: HashMap<String, Loadable<Vec<Playlist>>>,
+    /// The albums added to the library most recently.
+    pub latest_albums: Loadable<Vec<Album>>,
     /// Saved podcasts with their newest episodes, in library order, for the
     /// podcast shelf. A refresh replaces them only once it answers.
     pub podcasts: Vec<(Show, Vec<Episode>)>,
@@ -601,7 +601,13 @@ pub struct HomeData {
     pub loaded_at: Option<Instant>,
 }
 
-pub const DISCOVER_TERMS: &[&str] = &["Discover Weekly", "Release Radar", "Daily Mix", "daylist"];
+/// What the sign-in form holds while it is on screen.
+#[derive(Clone, Default)]
+pub struct LoginForm {
+    pub server: String,
+    pub username: String,
+    pub password: String,
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SearchFilter {
@@ -893,10 +899,6 @@ pub enum Dialog {
         duplicate_uris: Vec<String>,
     },
     Shortcuts,
-    /// The signed-in account is not Premium, so nothing will play.
-    PremiumNeeded,
-    /// Introduce personal Spotify apps to eligible listeners once.
-    PersonalAppIntro,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1030,8 +1032,6 @@ pub enum Action {
     },
     DeletePlaylist(String),
     Transfer(String),
-    /// Send the account to a receiver found on the local network.
-    ActivateReceiver(Box<crate::zeroconf::Receiver>),
     RefreshDevices,
     /// Empty Next up of its queued songs, keeping the context's own.
     ClearQueue,
@@ -1051,7 +1051,7 @@ pub enum Action {
     },
     /// Open a web page in the browser.
     OpenUrl(String),
-    OpenInSpotify(String),
+    OpenInJellyfin(String),
     Search(String),
     ForgetSearch(String),
     SetSearchFilter(SearchFilter),
@@ -1076,8 +1076,6 @@ pub enum Action {
     CancelSignIn,
     SignOut,
     /// Add, replace, or remove the optional personal Web API app.
-    ConfigurePersonalWebApp,
-    OpenPersonalAppSetup,
     ToggleSidebar,
     ToggleQueuePanel,
     ToggleLyricsPanel,
@@ -1115,7 +1113,6 @@ pub enum Action {
     /// restarts only when its HTTP proxy changed.
     ApplyProxy,
     ProxyEdited,
-    EnablePlayback,
     ShowWindow,
     HideWindow,
     ClearArtCache,
@@ -1131,7 +1128,7 @@ pub enum Action {
     SetSkinScale(u8),
     ToggleWinampOnTop,
     SetWinampTaskbar(bool),
-    /// Windows: draw Spotifast's own title bar instead of the standard one.
+    /// Windows: draw Jellifast's own title bar instead of the standard one.
     SetCustomTitlebar(bool),
     OpenSkinsFolder,
     /// Pick a different skin each time the mini player opens.

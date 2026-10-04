@@ -1,10 +1,9 @@
-//! Spotify Web API response shapes.
+//! The app's own shapes for music: songs, albums, artists, playlists, and
+//! the pages and lists they come in.
 //!
-//! Every field that Spotify may omit, null, or rename is optional or
-//! defaulted, so a response that changed shape degrades to a blank field
-//! instead of a failed page. The 2026 endpoint changes (`/playlists/{id}/items`
-//! returning `item` instead of `track`, `items.total` beside `tracks.total`)
-//! are accepted alongside the classic shapes.
+//! `super::jellyfin` builds them from the server's answers. They are also
+//! what the disk caches hold, so every field is optional or defaulted and a
+//! cache written by another version still reads.
 
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -146,12 +145,6 @@ pub fn pick_image(images: &[Image], target: u32) -> Option<&str> {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-pub struct ExternalUrls {
-    #[serde(default)]
-    pub spotify: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct Followers {
     #[serde(default)]
     pub total: u64,
@@ -187,8 +180,6 @@ pub struct Artist {
     pub followers: Option<Followers>,
     #[serde(default)]
     pub popularity: Option<u8>,
-    #[serde(default)]
-    pub external_urls: ExternalUrls,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -222,8 +213,6 @@ pub struct Album {
     pub popularity: Option<u8>,
     #[serde(default, deserialize_with = "positioned_album_tracks")]
     pub tracks: Option<Page<Track>>,
-    #[serde(default)]
-    pub external_urls: ExternalUrls,
     #[serde(default, deserialize_with = "null_default")]
     pub copyrights: Vec<Copyright>,
 }
@@ -295,12 +284,9 @@ pub struct Track {
     pub popularity: Option<u8>,
     #[serde(default)]
     pub external_ids: ExternalIds,
-    /// The originally requested track when Spotify substituted a playable
-    /// release for the account's market.
+    /// Another release of the same recording this track stands in for.
     #[serde(default)]
     pub linked_from: Option<LinkedTrack>,
-    #[serde(default)]
-    pub external_urls: ExternalUrls,
 }
 
 impl Track {
@@ -390,12 +376,10 @@ pub struct Episode {
     pub resume_point: Option<ResumePoint>,
     #[serde(default)]
     pub show: Option<Show>,
-    #[serde(default)]
-    pub external_urls: ExternalUrls,
 }
 
 impl Episode {
-    /// Spotify's saved place in this episode when it was started and not
+    /// The saved place in this episode when it was started and not
     /// finished, kept a moment short of the end. A finished or unstarted
     /// episode starts from the beginning.
     pub fn resume_ms(&self) -> Option<u32> {
@@ -436,8 +420,6 @@ pub struct Show {
     pub total_episodes: Option<u32>,
     #[serde(default)]
     pub episodes: Option<Page<Episode>>,
-    #[serde(default)]
-    pub external_urls: ExternalUrls,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -483,8 +465,6 @@ pub struct Playlist {
     pub tracks: Option<TrackCount>,
     #[serde(default, rename = "items")]
     pub items_count: Option<TrackCount>,
-    #[serde(default)]
-    pub external_urls: ExternalUrls,
 }
 
 impl Playlist {
@@ -495,12 +475,8 @@ impl Playlist {
             .map_or(0, |count| count.total)
     }
 
-    /// The owner as shown: the display name, else the id of anyone but
-    /// Spotify, whose lists carry no name over the streaming session.
-    /// Take from the library list's entry what this header lacks: the
-    /// streaming session's header carries no public flag, may leave the
-    /// owner unnamed, and has no picture for a playlist without a cover of
-    /// its own. What Spotify did say stays.
+    /// Take from the library list's entry what this header lacks. What the
+    /// server did say stays.
     pub fn fill_from(&mut self, listed: &Playlist) {
         if self.public.is_none() {
             self.public = listed.public;
@@ -517,8 +493,8 @@ impl Playlist {
         self.owner
             .display_name
             .as_deref()
-            .or_else(|| self.owner.id.as_deref().filter(|id| *id != "spotify"))
-            .unwrap_or("Spotify")
+            .or(self.owner.id.as_deref())
+            .unwrap_or("Jellyfin")
     }
 
     pub fn owned_by(&self, user_id: &str) -> bool {
@@ -526,7 +502,7 @@ impl Playlist {
     }
 }
 
-/// A track or an episode, as returned wherever Spotify mixes both.
+/// A track or an episode, wherever a list may hold both.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum PlayableItem {
@@ -591,7 +567,8 @@ impl PlayableItem {
     }
 }
 
-/// An entry in a playlist. `item` is the 2026 name, `track` the classic one.
+/// An entry in a playlist. `item` is what is written; `track` is what older
+/// caches hold.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct PlaylistItem {
     #[serde(default)]
@@ -780,10 +757,6 @@ pub struct User {
     #[serde(default, deserialize_with = "null_default")]
     pub images: Vec<Image>,
     #[serde(default)]
-    pub product: Option<String>,
-    #[serde(default)]
-    pub country: Option<String>,
-    #[serde(default)]
     pub uri: Option<String>,
 }
 
@@ -842,11 +815,11 @@ mod tests {
     fn an_albums_year_reads_a_date_the_way_format_date_does() {
         let dated = |date: &str| {
             let json = format!(
-                r#"{{"id":"a","name":"A","uri":"spotify:album:a","release_date":"{date}"}}"#
+                r#"{{"id":"a","name":"A","uri":"jellyfin:album:a","release_date":"{date}"}}"#
             );
             serde_json::from_str::<Album>(&json).unwrap()
         };
-        // The dates Spotify documents, at all three precisions.
+        // Release dates at all three precisions.
         assert_eq!(dated("2024-03-15").year(), Some("2024"));
         assert_eq!(dated("2024-03").year(), Some("2024"));
         assert_eq!(dated("2024").year(), Some("2024"));
@@ -861,22 +834,22 @@ mod tests {
             "\u{c791}\u{b144}"
         );
         // No date at all is still no year.
-        let json = r#"{"id":"a","name":"A","uri":"spotify:album:a"}"#;
+        let json = r#"{"id":"a","name":"A","uri":"jellyfin:album:a"}"#;
         assert_eq!(serde_json::from_str::<Album>(json).unwrap().year(), None);
     }
 
     #[test]
     fn album_tracks_keep_null_server_positions() {
-        let album: Album = serde_json::from_str(r#"{"tracks":{"items":[{"uri":"spotify:track:a"},null,{"uri":"spotify:track:c"}],"total":3,"limit":3}}"#).unwrap();
+        let album: Album = serde_json::from_str(r#"{"tracks":{"items":[{"uri":"jellyfin:track:a"},null,{"uri":"jellyfin:track:c"}],"total":3,"limit":3}}"#).unwrap();
         let tracks = album.tracks.unwrap();
         assert_eq!(tracks.items.len(), 3);
-        assert_eq!(tracks.items[2].uri, "spotify:track:c");
+        assert_eq!(tracks.items[2].uri, "jellyfin:track:c");
     }
 
     #[test]
     fn playlist_items_accept_both_item_and_track_keys() {
-        let classic = r#"{"items":[{"added_at":"2024-01-01T00:00:00Z","track":{"type":"track","id":"a","name":"One","uri":"spotify:track:a","duration_ms":1000,"artists":[{"name":"Artist"}]}}],"total":1}"#;
-        let modern = r#"{"items":[{"added_at":"2024-01-01T00:00:00Z","item":{"type":"episode","id":"e","name":"Ep","uri":"spotify:episode:e","duration_ms":2000}}, null],"total":2}"#;
+        let classic = r#"{"items":[{"added_at":"2024-01-01T00:00:00Z","track":{"type":"track","id":"a","name":"One","uri":"jellyfin:track:a","duration_ms":1000,"artists":[{"name":"Artist"}]}}],"total":1}"#;
+        let modern = r#"{"items":[{"added_at":"2024-01-01T00:00:00Z","item":{"type":"episode","id":"e","name":"Ep","uri":"jellyfin:episode:e","duration_ms":2000}}, null],"total":2}"#;
         let classic: Page<PlaylistItem> = serde_json::from_str(classic).unwrap();
         let modern: Page<PlaylistItem> = serde_json::from_str(modern).unwrap();
         assert_eq!(classic.items[0].playable().unwrap().name(), "One");
@@ -887,15 +860,13 @@ mod tests {
 
     #[test]
     fn playlist_total_prefers_items_count() {
-        let json = r#"{"id":"p","name":"P","uri":"spotify:playlist:p","items":{"total":12},"tracks":{"total":3},"owner":{"id":"me","display_name":"Me"}}"#;
+        let json = r#"{"id":"p","name":"P","uri":"jellyfin:playlist:p","items":{"total":12},"tracks":{"total":3},"owner":{"id":"me","display_name":"Me"}}"#;
         let playlist: Playlist = serde_json::from_str(json).unwrap();
         assert_eq!(playlist.track_total(), 12);
         assert!(playlist.owned_by("me"));
         assert_eq!(playlist.owner_name(), "Me");
     }
 
-    /// An owner without a display name shows as the id, except Spotify,
-    /// whose lists carry no name over the streaming session.
     /// A header takes from the library list only what it lacks.
     #[test]
     fn a_header_takes_from_the_list_only_what_it_lacks() {
@@ -921,7 +892,7 @@ mod tests {
         let mut told = Playlist {
             public: Some(false),
             owner: Owner {
-                display_name: Some("Spotify".into()),
+                display_name: Some("Server".into()),
                 ..Default::default()
             },
             images: vec![Image {
@@ -932,12 +903,12 @@ mod tests {
         };
         told.fill_from(&listed);
         assert_eq!(told.public, Some(false));
-        assert_eq!(told.owner.display_name.as_deref(), Some("Spotify"));
+        assert_eq!(told.owner.display_name.as_deref(), Some("Server"));
         assert_eq!(told.images[0].url, "cover");
     }
 
     #[test]
-    fn owner_name_falls_back_to_the_id_but_not_for_spotify() {
+    fn owner_name_falls_back_to_the_id_and_then_to_the_server() {
         let named = |id: Option<&str>, name: Option<&str>| Playlist {
             owner: Owner {
                 id: id.map(str::to_string),
@@ -948,8 +919,7 @@ mod tests {
         };
         assert_eq!(named(Some("1263908142"), None).owner_name(), "1263908142");
         assert_eq!(named(Some("1263908142"), Some("mgc")).owner_name(), "mgc");
-        assert_eq!(named(Some("spotify"), None).owner_name(), "Spotify");
-        assert_eq!(named(None, None).owner_name(), "Spotify");
+        assert_eq!(named(None, None).owner_name(), "Jellyfin");
     }
 
     #[test]
@@ -979,7 +949,7 @@ mod tests {
 
     #[test]
     fn null_fields_fall_back_to_defaults() {
-        let json = r#"{"id":"x","name":"X","uri":"spotify:artist:x","images":null,"genres":null,"followers":null}"#;
+        let json = r#"{"id":"x","name":"X","uri":"jellyfin:artist:x","images":null,"genres":null,"followers":null}"#;
         let artist: Artist = serde_json::from_str(json).unwrap();
         assert!(artist.images.is_empty());
         assert!(artist.genres.is_empty());
@@ -996,21 +966,21 @@ mod tests {
     }
 
     #[test]
-    fn track_keeps_spotifys_recording_and_relink_identities() {
-        let json = r#"{"id":"playable","uri":"spotify:track:playable","external_ids":{"isrc":"GBUM71029604"},"linked_from":{"id":"original","uri":"spotify:track:original"}}"#;
+    fn track_keeps_recording_and_relink_identities() {
+        let json = r#"{"id":"playable","uri":"jellyfin:track:playable","external_ids":{"isrc":"GBUM71029604"},"linked_from":{"id":"original","uri":"jellyfin:track:original"}}"#;
         let track: Track = serde_json::from_str(json).unwrap();
 
         assert_eq!(track.external_ids.isrc.as_deref(), Some("GBUM71029604"));
         assert_eq!(
             track.linked_from.as_ref().map(|track| track.uri.as_str()),
-            Some("spotify:track:original")
+            Some("jellyfin:track:original")
         );
         assert_eq!(track.recording_key().as_deref(), Some("isrc:GBUM71029604"));
     }
 
     #[test]
     fn search_playlists_skip_null_entries() {
-        let json = r#"{"playlists":{"items":[null,{"id":"p","name":"P","uri":"spotify:playlist:p"}],"total":2,"limit":2,"offset":0,"next":"next page"}}"#;
+        let json = r#"{"playlists":{"items":[null,{"id":"p","name":"P","uri":"jellyfin:playlist:p"}],"total":2,"limit":2,"offset":0,"next":"next page"}}"#;
         let results: SearchResults = serde_json::from_str(json).unwrap();
         let playlists = results.playlists.unwrap();
         assert_eq!(playlists.items.len(), 1);

@@ -1,64 +1,23 @@
 ---
 title: Privacy
-description: What Spotifast stores on your computer, what it sends and to whom, and what it never collects.
-nav_order: 4
+description: What Jellifast sends, to whom, and what stays on this computer.
+nav_order: 3
 ---
 
-Spotifast is a desktop app that runs entirely on your computer. It has no
-account of its own, no server, no telemetry, no analytics, and no advertising.
-Its author receives nothing about you or how you use it.
+Jellifast has no telemetry, analytics, or hosted service. It talks to the
+Jellyfin server you sign in to, and to three other places for specific tasks.
 
-This page covers the Spotifast app, version 0.8.0 and later. Earlier versions
-kept sign-ins in files instead of the system credential store; update to a
-current release.
+- **Your Jellyfin server** receives your user name and password once at
+  sign-in, and afterwards an access token with every request. It is told what
+  this computer plays, so its play counts and history stay true. See
+  [How It Connects](how-it-connects.md) for every request.
+- **lrclib.net** receives the artist, title, album and length of the playing
+  song when the lyrics panel is open and the server has no lyrics for it.
+- **GitHub** is asked once a day whether a newer release exists. Automatic
+  checks can be turned off in Settings. No personal data is sent.
+- **GitHub** serves the MilkDrop preset packs the first time MilkDrop opens
+  with an empty preset folder.
 
-## What stays on your computer
-
-- **Spotify sign-ins.** The grants Spotify issues when you sign in, and the
-  reusable playback credential, are kept in the system credential store:
-  Credential Manager on Windows, Keychain on macOS, and Secret Service on
-  Linux. Your Spotify password never passes through Spotifast; you sign in
-  on Spotify's own pages. A proxy password, if you set one, uses the same
-  store.
-- **Settings and history.** Settings, window positions, recent plays, the
-  last session, skins, themes and MilkDrop presets live in the config
-  directory.
-- **Caches.** Downloaded audio, artwork, lyrics and library metadata live in
-  the cache directory and can be deleted at any time.
-- **Log.** `spotifast.log` records errors and diagnostics. It stays on your
-  computer and never contains credentials; share it only if you choose to
-  attach it to a bug report.
-
-[Settings & Files](/settings-and-files/) lists every location and what is safe
-to delete. **Sign out** in Settings removes the stored credentials.
-
-## What is sent, and to whom
-
-Spotifast connects only to the services below.
-
-- **Spotify.** Sign-in, your library, search, playlists, playback and Spotify
-  Connect all go to Spotify, under your account. Spotify's own
-  [privacy policy](https://www.spotify.com/legal/privacy-policy/) applies to
-  that data.
-- **LRCLIB.** When the lyrics panel is open and Spotify has no lyrics for the
-  song, Spotifast sends its artist, title, album and length to
-  [lrclib.net](https://lrclib.net). Nothing identifying you is included.
-- **GitHub.** Once a day, Spotifast asks GitHub for the latest release. You
-  can turn automatic checks off in Settings. Downloading an update, and the
-  first opening of MilkDrop, also fetch files from GitHub. No Spotify data is
-  sent.
-- **Your local network.** Spotifast looks for Spotify Connect speakers over
-  mDNS and talks to the ones you choose.
-
-Links you open from the app, such as the Winamp Skin Museum or this website,
-open in your browser.
-
-## This website
-
-spotifast.rocks counts page visits with [Plausible](https://plausible.io/data-policy),
-which uses no cookies and collects no personal data. The app itself contains
-no analytics.
-
-## Questions
-
-Ask on [GitHub](https://github.com/crmne/spotifast/issues).
+The password is never stored. The access token is kept in the system credential
+store and deleted by **Sign out**. Logs never contain the token or the
+password.

@@ -2,35 +2,31 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>Spotifast</string>
-    <key>CFBundleDisplayName</key><string>Spotifast</string>
+    <key>CFBundleName</key><string>Jellifast</string>
+    <key>CFBundleDisplayName</key><string>Jellifast</string>
     <key>CFBundleIdentifier</key><string>__IDENTIFIER__</string>
     <key>CFBundleExecutable</key><string>__EXECUTABLE__</string>
-    <key>CFBundleIconFile</key><string>spotifast</string>
+    <key>CFBundleIconFile</key><string>jellifast</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>__VERSION__</string>
     <key>CFBundleVersion</key><string>__BUILD__</string>
     <key>LSMinimumSystemVersion</key><string>11.0</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.music</string>
     <key>NSHighResolutionCapable</key><true/>
-    <key>NSLocalNetworkUsageDescription</key><string>Find Spotify Connect speakers on your local network.</string>
-    <key>NSBonjourServices</key>
-    <array>
-        <string>_spotify-connect._tcp</string>
-    </array>
-    <!-- Spotify links (spotify:track:…) open in Spotifast; src/mac_links.rs
+    <key>NSLocalNetworkUsageDescription</key><string>Reach a Jellyfin server on your local network.</string>
+    <!-- Jellifast links (jellifast://track/…) open in Jellifast; src/mac_links.rs
          takes them. Launch Services notes this when the app is first opened. -->
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
-            <key>CFBundleURLName</key><string>Spotify link</string>
+            <key>CFBundleURLName</key><string>Jellifast link</string>
             <key>CFBundleURLSchemes</key>
             <array>
-                <string>spotify</string>
+                <string>jellifast</string>
             </array>
             <key>CFBundleTypeRole</key><string>Viewer</string>
         </dict>
     </array>
-    <key>NSHumanReadableCopyright</key><string>© 2026 Carmine Paolino. MIT License. Not affiliated with Spotify AB.</string>
+    <key>NSHumanReadableCopyright</key><string>© 2026 Carmine Paolino and Jellifast contributors. MIT License. Not affiliated with the Jellyfin project.</string>
 </dict>
 </plist>

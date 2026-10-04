@@ -308,7 +308,7 @@ fn set_button_tint(button: &NSButton, tint: &NSColor) {
 
 fn attach_button_action(
     button: &NSButton,
-    target: &SpotifastNotchActionHandler,
+    target: &JellifastNotchActionHandler,
     action: objc2::runtime::Sel,
     tint: &NSColor,
 ) {
@@ -390,10 +390,10 @@ fn update_repeat_button_ui(
 define_class!(
     #[unsafe(super(NSObject))]
     #[thread_kind = MainThreadOnly]
-    #[name = "SpotifastNotchActionHandler"]
-    pub struct SpotifastNotchActionHandler;
+    #[name = "JellifastNotchActionHandler"]
+    pub struct JellifastNotchActionHandler;
 
-    impl SpotifastNotchActionHandler {
+    impl JellifastNotchActionHandler {
         #[unsafe(method(onPlayPause:))]
         fn on_play_pause(&self, _sender: &NSObject) {
             if let Ok(mut lock) = CONTROLLER.lock()
@@ -469,10 +469,10 @@ define_class!(
 define_class!(
     #[unsafe(super(NSView))]
     #[thread_kind = MainThreadOnly]
-    #[name = "SpotifastNotchView"]
-    pub struct SpotifastNotchView;
+    #[name = "JellifastNotchView"]
+    pub struct JellifastNotchView;
 
-    impl SpotifastNotchView {
+    impl JellifastNotchView {
         #[unsafe(method(isFlipped))]
         fn is_flipped(&self) -> bool {
             true
@@ -498,10 +498,10 @@ define_class!(
 define_class!(
     #[unsafe(super(NSView))]
     #[thread_kind = MainThreadOnly]
-    #[name = "SpotifastCardView"]
-    pub struct SpotifastCardView;
+    #[name = "JellifastCardView"]
+    pub struct JellifastCardView;
 
-    impl SpotifastCardView {
+    impl JellifastCardView {
         #[unsafe(method(isFlipped))]
         fn is_flipped(&self) -> bool {
             true
@@ -517,10 +517,10 @@ define_class!(
 define_class!(
     #[unsafe(super(NSView))]
     #[thread_kind = MainThreadOnly]
-    #[name = "SpotifastCanvasView"]
-    pub struct SpotifastCanvasView;
+    #[name = "JellifastCanvasView"]
+    pub struct JellifastCanvasView;
 
-    impl SpotifastCanvasView {
+    impl JellifastCanvasView {
         #[unsafe(method(isFlipped))]
         fn is_flipped(&self) -> bool {
             true
@@ -552,10 +552,10 @@ struct NotchFrames {
 
 struct NotchController {
     window: Retained<NSWindow>,
-    _view: Retained<SpotifastNotchView>,
-    card_view: Retained<SpotifastCardView>,
+    _view: Retained<JellifastNotchView>,
+    card_view: Retained<JellifastCardView>,
     visual_effect: Retained<NSVisualEffectView>,
-    canvas_view: Retained<SpotifastCanvasView>,
+    canvas_view: Retained<JellifastCanvasView>,
     title_field: Retained<NSTextField>,
     artist_field: Retained<NSTextField>,
     elapsed_field: Retained<NSTextField>,
@@ -569,7 +569,7 @@ struct NotchController {
     repeat_button: Retained<NSButton>,
     device_button: Retained<NSButton>,
     icons: NotchIcons,
-    _action_handler: Retained<SpotifastNotchActionHandler>,
+    _action_handler: Retained<JellifastNotchActionHandler>,
     collapsed_frame: NSRect,
     expanded_frame: NSRect,
     collapsed_card_frame: NSRect,
@@ -630,7 +630,7 @@ fn update_artwork_path(ctrl: &mut NotchController, art_path: Option<PathBuf>) {
 
 fn screen_top_inset(screen: &NSScreen) -> f64 {
     // safeAreaInsets was introduced in macOS 12.0 (Monterey).
-    // Spotifast supports macOS 11.0+ (Big Sur), where calling the selector directly
+    // Jellifast supports macOS 11.0+ (Big Sur), where calling the selector directly
     // would raise an unrecognized-selector exception. Notched MacBooks did not
     // exist before macOS 12, so a zero-inset fallback on macOS 11 is strictly correct.
     unsafe {
@@ -680,7 +680,7 @@ fn compute_frames(mtm: MainThreadMarker) -> Option<NotchFrames> {
 }
 
 fn update_time_labels(
-    canvas_view: &SpotifastCanvasView,
+    canvas_view: &JellifastCanvasView,
     elapsed_field: &NSTextField,
     duration_field: &NSTextField,
     position_ms: u32,
@@ -810,9 +810,9 @@ pub fn init() {
             | NSWindowCollectionBehavior::IgnoresCycle,
     );
 
-    let view: Retained<SpotifastNotchView> = unsafe {
+    let view: Retained<JellifastNotchView> = unsafe {
         let view_frame = NSRect::new(NSPoint::ZERO, frames.collapsed_window.size);
-        objc2::msg_send![mtm.alloc::<SpotifastNotchView>(), initWithFrame: view_frame]
+        objc2::msg_send![mtm.alloc::<JellifastNotchView>(), initWithFrame: view_frame]
     };
 
     let options = NSTrackingAreaOptions::MouseEnteredAndExited
@@ -830,16 +830,16 @@ pub fn init() {
     view.addTrackingArea(&tracking_area);
     window.setContentView(Some(&view));
 
-    let action_handler: Retained<SpotifastNotchActionHandler> =
-        unsafe { objc2::msg_send![mtm.alloc::<SpotifastNotchActionHandler>(), init] };
+    let action_handler: Retained<JellifastNotchActionHandler> =
+        unsafe { objc2::msg_send![mtm.alloc::<JellifastNotchActionHandler>(), init] };
 
     let card_w = frames.expanded_card.size.width;
     let card_h = 148.0;
     let card_bounds = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(card_w, card_h));
 
     // Outer container view for the card
-    let card_view: Retained<SpotifastCardView> = unsafe {
-        objc2::msg_send![mtm.alloc::<SpotifastCardView>(), initWithFrame: frames.collapsed_card]
+    let card_view: Retained<JellifastCardView> = unsafe {
+        objc2::msg_send![mtm.alloc::<JellifastCardView>(), initWithFrame: frames.collapsed_card]
     };
     card_view.setWantsLayer(true);
     card_view.setAlphaValue(0.0); // Starts hidden with smooth fade-in
@@ -847,7 +847,7 @@ pub fn init() {
     view.addSubview(&card_view);
 
     // 1. Native dark frosted glass vibrancy layer (Bottom layer)
-    // HUDWindow gives the same dark semi-transparent blur that Spotifast uses for overlays.
+    // HUDWindow gives the same dark semi-transparent blur that Jellifast uses for overlays.
     let visual_effect = NSVisualEffectView::initWithFrame(mtm.alloc(), card_bounds);
     visual_effect.setMaterial(NSVisualEffectMaterial::HUDWindow);
     visual_effect.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
@@ -857,8 +857,8 @@ pub fn init() {
     card_view.addSubview(&visual_effect);
 
     // 2. Custom Canvas View: Drawn on top of visual effect (seek bar, waveform, outline)
-    let canvas_view: Retained<SpotifastCanvasView> =
-        unsafe { objc2::msg_send![mtm.alloc::<SpotifastCanvasView>(), initWithFrame: card_bounds] };
+    let canvas_view: Retained<JellifastCanvasView> =
+        unsafe { objc2::msg_send![mtm.alloc::<JellifastCanvasView>(), initWithFrame: card_bounds] };
     canvas_view.setWantsLayer(true);
     // Mark the canvas with an accessible slider role so VoiceOver announces the progress
     // bar as "Playback Position, slider" and offers arrow-key seek to keyboard users.
@@ -1225,7 +1225,7 @@ fn handle_mouse_exited() {
     }
 }
 
-fn handle_canvas_mouse_down(view: &SpotifastCanvasView, event: &NSEvent) {
+fn handle_canvas_mouse_down(view: &JellifastCanvasView, event: &NSEvent) {
     let location = event.locationInWindow();
     let local: NSPoint =
         unsafe { objc2::msg_send![view, convertPoint: location, fromView: None::<&NSView>] };
@@ -1266,11 +1266,11 @@ fn handle_canvas_mouse_down(view: &SpotifastCanvasView, event: &NSEvent) {
         }
     }
 
-    // Otherwise clicking anywhere on the card brings Spotifast to front
+    // Otherwise clicking anywhere on the card brings Jellifast to front
     push_command(NotchCommand::ShowWindow);
 }
 
-fn handle_canvas_mouse_dragged(view: &SpotifastCanvasView, event: &NSEvent) {
+fn handle_canvas_mouse_dragged(view: &JellifastCanvasView, event: &NSEvent) {
     let location = event.locationInWindow();
     let local: NSPoint =
         unsafe { objc2::msg_send![view, convertPoint: location, fromView: None::<&NSView>] };
@@ -1306,7 +1306,7 @@ fn handle_canvas_mouse_dragged(view: &SpotifastCanvasView, event: &NSEvent) {
     }
 }
 
-fn handle_draw_canvas(_view: &SpotifastCanvasView, _dirty: NSRect) {
+fn handle_draw_canvas(_view: &JellifastCanvasView, _dirty: NSRect) {
     let Ok(lock) = CONTROLLER.lock() else {
         return;
     };
@@ -1319,12 +1319,12 @@ fn handle_draw_canvas(_view: &SpotifastCanvasView, _dirty: NSRect) {
     let card_rect = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(card_w, card_h));
 
     // 1. Panel background: Subtle dark glass fill on top of HUDWindow blur.
-    //    Matches Spotifast's dark panel palette.panel (0x15, 0x18, 0x1c).
+    //    Matches Jellifast's dark panel palette.panel (0x15, 0x18, 0x1c).
     let base_path = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(card_rect, 18.0, 18.0);
     NSColor::colorWithRed_green_blue_alpha(0.08, 0.09, 0.11, 0.78).set();
     base_path.fill();
 
-    // 2. 1px crisp outline: Matches Spotifast's palette.outline (0x2a, 0x30, 0x38).
+    // 2. 1px crisp outline: Matches Jellifast's palette.outline (0x2a, 0x30, 0x38).
     let border_rect = NSRect::new(
         NSPoint::new(0.5, 0.5),
         NSSize::new(card_w - 1.0, card_h - 1.0),
@@ -1354,7 +1354,7 @@ fn handle_draw_canvas(_view: &SpotifastCanvasView, _dirty: NSRect) {
         accent.fill();
     }
 
-    // 4. Seek Bar (Row 2) - Matches Spotifast player bar thin_slider (shape, height, colors, handle)
+    // 4. Seek Bar (Row 2) - Matches Jellifast player bar thin_slider (shape, height, colors, handle)
     let start_x = 60.0f64;
     let end_x = (card_w - 58.0).max(start_x + 20.0);
     let track_w = (end_x - start_x).max(1.0);
@@ -1413,7 +1413,7 @@ fn handle_draw_canvas(_view: &SpotifastCanvasView, _dirty: NSRect) {
     NSColor::whiteColor().set();
     thumb_path.fill();
 
-    // 5. Play button circular disc (Row 3, Center) - Matches Spotifast theme::circle_button (diameter 36.0)
+    // 5. Play button circular disc (Row 3, Center) - Matches Jellifast theme::circle_button (diameter 36.0)
     let center_x = card_w / 2.0;
     let disc_rect = NSRect::new(NSPoint::new(center_x - 18.0, 97.0), NSSize::new(36.0, 36.0));
     let disc_path = NSBezierPath::bezierPathWithOvalInRect(disc_rect);
@@ -1574,7 +1574,7 @@ pub fn sync_state(enabled: bool, is_background: bool, track: Option<&NotchTrackI
 
         if let Some(t) = track {
             let title = if t.title.trim().is_empty() {
-                "Spotifast"
+                "Jellifast"
             } else {
                 &t.title
             };
@@ -1603,7 +1603,7 @@ pub fn sync_state(enabled: bool, is_background: bool, track: Option<&NotchTrackI
             update_artwork_path(ctrl, t.art_path.clone());
         } else {
             ctrl.title_field
-                .setStringValue(&NSString::from_str("Spotifast"));
+                .setStringValue(&NSString::from_str("Jellifast"));
             ctrl.artist_field
                 .setStringValue(&NSString::from_str("Nothing playing"));
             update_time_labels(

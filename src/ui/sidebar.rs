@@ -52,7 +52,7 @@ fn entry_play_uri(app: &App, entry: &Entry) -> Option<String> {
     if entry.liked {
         app.user
             .as_ref()
-            .map(|user| format!("spotify:user:{}:collection", user.id))
+            .map(|user| format!("jellyfin:user:{}:collection", user.id))
     } else if entry.uri.is_empty() {
         None
     } else {
@@ -338,7 +338,7 @@ pub(crate) fn selected_sort(app: &App, shelf: Filter) -> LibrarySort {
         .iter()
         .any(|row| matches!(row, crate::player::RootlistEntry::FolderStart { .. }))
     {
-        LibrarySort::Spotify
+        LibrarySort::Server
     } else {
         LibrarySort::RecentlyPlayed
     }
@@ -358,10 +358,7 @@ fn sort_menu(app: &mut App, ui: &mut egui::Ui, shelf: Filter, selected: LibraryS
             gettext(locale, "Recently added"),
         ),
         (LibrarySort::Local, gettext(locale, "Local custom order")),
-        (
-            LibrarySort::Spotify,
-            gettext(locale, "Spotify custom order"),
-        ),
+        (LibrarySort::Server, gettext(locale, "Custom order")),
     ];
     let label = &labels
         .iter()
@@ -430,7 +427,7 @@ fn order_entries(app: &App, shelf: Filter, sort: LibrarySort, entries: &mut [Ent
                 .position(|held| {
                     if entry.liked {
                         app.user_id()
-                            .is_some_and(|id| held == &format!("spotify:user:{id}:collection"))
+                            .is_some_and(|id| held == &format!("jellyfin:user:{id}:collection"))
                     } else {
                         held == &entry.uri
                     }
@@ -450,10 +447,10 @@ fn order_entries(app: &App, shelf: Filter, sort: LibrarySort, entries: &mut [Ent
                 None => (0, entry.playlist_index.unwrap_or(0)),
             }
         }),
-        LibrarySort::Spotify if !entries.iter().any(|entry| entry.folder.is_some()) => {
+        LibrarySort::Server if !entries.iter().any(|entry| entry.folder.is_some()) => {
             entries.sort_by_key(|entry| (entry.liked, app.rootlist.iter().position(|row| matches!(row, crate::player::RootlistEntry::Playlist(uri) if uri == &entry.uri)).unwrap_or(usize::MAX)));
         }
-        LibrarySort::Spotify => entries.sort_by_key(|entry| entry.liked),
+        LibrarySort::Server => entries.sort_by_key(|entry| entry.liked),
         LibrarySort::Library => {}
     }
     let pins = app.settings.library_pins();
@@ -962,7 +959,6 @@ fn contents(app: &mut App, ui: &mut egui::Ui, grid_art: Option<Rect>) {
             (Filter::Playlists, gettext(locale, "Playlists")),
             (Filter::Albums, gettext(locale, "Albums")),
             (Filter::Artists, gettext(locale, "Artists")),
-            (Filter::Podcasts, gettext(locale, "Podcasts")),
         ] {
             if theme::soft_button(ui, &palette, None, &label, filter == value).clicked() {
                 filter = value;
@@ -1036,7 +1032,7 @@ fn contents(app: &mut App, ui: &mut egui::Ui, grid_art: Option<Rect>) {
             if needle.is_empty() || liked.name.to_lowercase().contains(&needle) {
                 entries.push(liked);
             }
-            let show_folders = sort == LibrarySort::Spotify && needle.is_empty();
+            let show_folders = sort == LibrarySort::Server && needle.is_empty();
             if show_folders {
                 folder_rows(app, &user_id, &mut entries);
             }
@@ -1859,7 +1855,7 @@ fn entry_menu(app: &mut App, response: &egui::Response, entry: &Entry, custom_or
                 ) && let Some(user) = &app.user
                 {
                     app.actions.push(Action::PlayContext {
-                        uri: format!("spotify:user:{}:collection", user.id),
+                        uri: format!("jellyfin:user:{}:collection", user.id),
                         offset_uri: None,
                         offset_index: None,
                     });
@@ -2064,7 +2060,7 @@ mod ordering_tests {
 
     fn app(name: &str) -> App {
         let root =
-            std::env::temp_dir().join(format!("spotifast-order-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-order-{name}-{}", std::process::id()));
         let mut app = App::new(
             &crate::backend::Waker::default(),
             crate::paths::AppDirs {
@@ -2091,7 +2087,7 @@ mod ordering_tests {
             .map(|(id, name)| Playlist {
                 id: id.into(),
                 name: name.into(),
-                uri: format!("spotify:playlist:{id}"),
+                uri: format!("jellyfin:playlist:{id}"),
                 ..Default::default()
             })
             .collect(),
@@ -2107,7 +2103,7 @@ mod ordering_tests {
     }
 
     fn uri(id: &str) -> String {
-        format!("spotify:playlist:{id}")
+        format!("jellyfin:playlist:{id}")
     }
 
     fn rows(app: &App) -> Vec<Entry> {
@@ -2287,7 +2283,7 @@ mod ordering_tests {
         app.settings.pinned_contexts = vec![uri("b")];
         let mut entries = vec![];
         folder_rows(&app, "", &mut entries);
-        order_entries(&app, Filter::Playlists, LibrarySort::Spotify, &mut entries);
+        order_entries(&app, Filter::Playlists, LibrarySort::Server, &mut entries);
         assert_eq!(
             entries
                 .iter()
@@ -2304,7 +2300,7 @@ mod ordering_tests {
         app.collapsed_folders.clear();
         let mut entries = vec![];
         folder_rows(&app, "", &mut entries);
-        order_entries(&app, Filter::Playlists, LibrarySort::Spotify, &mut entries);
+        order_entries(&app, Filter::Playlists, LibrarySort::Server, &mut entries);
         assert_eq!(
             entries
                 .iter()
@@ -2340,7 +2336,7 @@ mod ordering_tests {
         app.collapsed_folders = vec!["folder".into()];
         let mut entries = vec![];
         folder_rows(&app, "", &mut entries);
-        order_entries(&app, Filter::Playlists, LibrarySort::Spotify, &mut entries);
+        order_entries(&app, Filter::Playlists, LibrarySort::Server, &mut entries);
         drop_playlist_row(&mut app, &entries, 0, 0, &uri("a"));
         apply_actions(&mut app);
         assert_eq!(app.settings.sidebar_order, ["a", "b", "c", "d"].map(uri));
@@ -2411,7 +2407,7 @@ mod ordering_tests {
     fn preferences_round_trip_and_new_playlists_still_precede_saved_order() {
         let mut app = app("migration");
         app.settings = serde_json::from_str(
-            r#"{"sidebar_order":["spotify:playlist:c","spotify:playlist:a","spotify:playlist:b"]}"#,
+            r#"{"sidebar_order":["jellyfin:playlist:c","jellyfin:playlist:a","jellyfin:playlist:b"]}"#,
         )
         .unwrap();
         assert_eq!(selected_sort(&app, Filter::Playlists), LibrarySort::Local);
@@ -2419,7 +2415,7 @@ mod ordering_tests {
         assert_eq!(full_playlist_order(&app), ["d", "c", "a", "b"].map(uri));
         app.settings
             .library_sort
-            .insert(Filter::Playlists, LibrarySort::Spotify);
+            .insert(Filter::Playlists, LibrarySort::Server);
         app.settings
             .library_sort
             .insert(Filter::Albums, LibrarySort::RecentlyAdded);
@@ -2531,7 +2527,7 @@ mod ordering_tests {
         app.settings.liked_songs_pinned = false;
         app.recent_contexts = vec![
             uri("a"),
-            format!("spotify:user:{}:collection", app.user_id().unwrap()),
+            format!("jellyfin:user:{}:collection", app.user_id().unwrap()),
             uri("c"),
         ];
         app.settings
@@ -2559,10 +2555,10 @@ mod ordering_tests {
         app.collapsed_folders = vec!["folder".into()];
         app.settings
             .library_sort
-            .insert(Filter::Playlists, LibrarySort::Spotify);
+            .insert(Filter::Playlists, LibrarySort::Server);
         let mut entries = vec![liked_entry(&app)];
         folder_rows(&app, "", &mut entries);
-        order_entries(&app, Filter::Playlists, LibrarySort::Spotify, &mut entries);
+        order_entries(&app, Filter::Playlists, LibrarySort::Server, &mut entries);
         assert!(entries.last().unwrap().liked);
         assert_eq!(entries.last().unwrap().depth, 0);
         drop_playlist_row(&mut app, &entries, 0, 0, LIKED_SONGS_KEY);

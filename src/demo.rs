@@ -22,17 +22,17 @@ use crate::model::*;
 fn image(seed: u32) -> Vec<Image> {
     vec![
         Image {
-            url: format!("https://picsum.photos/seed/spotifast{seed}/640/640"),
+            url: format!("https://picsum.photos/seed/jellifast{seed}/640/640"),
             width: Some(640),
             height: Some(640),
         },
         Image {
-            url: format!("https://picsum.photos/seed/spotifast{seed}/300/300"),
+            url: format!("https://picsum.photos/seed/jellifast{seed}/300/300"),
             width: Some(300),
             height: Some(300),
         },
         Image {
-            url: format!("https://picsum.photos/seed/spotifast{seed}/64/64"),
+            url: format!("https://picsum.photos/seed/jellifast{seed}/64/64"),
             width: Some(64),
             height: Some(64),
         },
@@ -125,7 +125,7 @@ fn artist_ref(index: usize) -> ArtistRef {
     ArtistRef {
         id: Some(format!("art{index}")),
         name: ARTISTS[index % ARTISTS.len()].to_string(),
-        uri: Some(format!("spotify:artist:art{index}")),
+        uri: Some(format!("jellyfin:artist:art{index}")),
     }
 }
 
@@ -133,14 +133,13 @@ fn artist(index: usize) -> Artist {
     Artist {
         id: format!("art{index}"),
         name: ARTISTS[index % ARTISTS.len()].to_string(),
-        uri: format!("spotify:artist:art{index}"),
+        uri: format!("jellyfin:artist:art{index}"),
         images: image(100 + index as u32),
         genres: vec!["electronic".into(), "downtempo".into(), "ambient".into()],
         followers: Some(Followers {
             total: 1_284_930 + index as u64 * 10_431,
         }),
         popularity: Some(70),
-        ..Artist::default()
     }
 }
 
@@ -149,7 +148,7 @@ fn album(index: usize) -> Album {
     Album {
         id: format!("alb{index}"),
         name: name.to_string(),
-        uri: format!("spotify:album:alb{index}"),
+        uri: format!("jellyfin:album:alb{index}"),
         album_type: Some(if index % 4 == 3 {
             "single".into()
         } else {
@@ -175,7 +174,7 @@ fn track(index: usize) -> Track {
     Track {
         id: Some(format!("trk{index}")),
         name: TRACKS[index % TRACKS.len()].to_string(),
-        uri: format!("spotify:track:trk{index}"),
+        uri: format!("jellyfin:track:trk{index}"),
         duration_ms: 180_000 + (index as u32 * 37_000) % 240_000,
         explicit: index % 7 == 3,
         artists: vec![artist_ref(album_index)],
@@ -193,7 +192,7 @@ fn playlist(index: usize) -> Playlist {
     Playlist {
         id: format!("pl{index}"),
         name: name.to_string(),
-        uri: format!("spotify:playlist:pl{index}"),
+        uri: format!("jellyfin:playlist:pl{index}"),
         description: Some(if spotify_owned {
             "Your weekly mixtape of fresh music. Enjoy new music and deep cuts picked for you. Updates every Monday.".into()
         } else {
@@ -227,7 +226,7 @@ fn episode(index: usize, show_index: usize) -> Episode {
     Episode {
         id: format!("ep{show_index}_{index}"),
         name: format!("Episode {}: {}", 120 - index, TRACKS[(index * 3) % TRACKS.len()]),
-        uri: format!("spotify:episode:ep{show_index}_{index}"),
+        uri: format!("jellyfin:episode:ep{show_index}_{index}"),
         duration_ms: 2_400_000 + (index as u32 * 311_000) % 2_000_000,
         description: "A conversation about how software gets made, why some tools feel fast, and what we can learn from the people who build them. Recorded live.".into(),
         images: image(400 + index as u32),
@@ -245,7 +244,7 @@ fn show(index: usize) -> Show {
     Show {
         id: format!("sh{index}"),
         name: ["Rework", "Song Exploder", "The Rest Is History", "Darknet Diaries"][index % 4].into(),
-        uri: format!("spotify:show:sh{index}"),
+        uri: format!("jellyfin:show:sh{index}"),
         publisher: ["37signals", "Hrishikesh Hirway", "Goalhanger", "Jack Rhysider"][index % 4].into(),
         description: "A podcast about a better way to work and run your business. Hosted by the founders of 37signals.".into(),
         images: image(500 + index as u32),
@@ -280,9 +279,7 @@ pub fn populate(app: &mut App) {
         id: "demo".into(),
         display_name: Some("Carmine".into()),
         images: image(1),
-        product: Some("premium".into()),
-        country: Some("DE".into()),
-        uri: Some("spotify:user:demo".into()),
+        uri: Some("jellyfin:user:demo".into()),
     });
 
     let playlists: Vec<Playlist> = (0..PLAYLISTS.len()).map(playlist).collect();
@@ -360,7 +357,7 @@ pub fn populate(app: &mut App) {
         .tracks
         .absorb(0, page(tracks.iter().take(12).cloned().collect()));
     app.album_pages.insert("alb0".into(), album_page);
-    app.saved.insert("spotify:album:alb0".into(), true);
+    app.saved.insert("jellyfin:album:alb0".into(), true);
 
     // Artist page.
     let mut artist_page = ArtistPage {
@@ -375,7 +372,7 @@ pub fn populate(app: &mut App) {
         .albums
         .insert(DiscographyFilter::All.groups().to_string(), albums);
     app.artist_pages.insert("art0".into(), artist_page);
-    app.saved.insert("spotify:artist:art0".into(), true);
+    app.saved.insert("jellyfin:artist:art0".into(), true);
 
     // Show page.
     let mut show_page = ShowPage {
@@ -388,7 +385,7 @@ pub fn populate(app: &mut App) {
     app.show_pages.insert("sh0".into(), show_page);
 
     // Radio pages, for a song and for a playlist.
-    for (seed, first) in [("spotify:track:trk0", 1), ("spotify:playlist:pl1", 8)] {
+    for (seed, first) in [("jellyfin:track:trk0", 1), ("jellyfin:playlist:pl1", 8)] {
         app.radio_pages.insert(
             seed.into(),
             RadioPage {
@@ -522,16 +519,7 @@ pub fn populate(app: &mut App) {
     app.home.top_songs = Loadable::Loaded(tracks.iter().skip(10).cloned().collect());
     app.home.top_songs_complete = true;
     app.home.recommendations = Loadable::Loaded(tracks.iter().skip(20).take(10).cloned().collect());
-    for term in DISCOVER_TERMS {
-        let matching: Vec<Playlist> = playlists
-            .iter()
-            .filter(|playlist| playlist.name.to_lowercase().contains(&term.to_lowercase()))
-            .cloned()
-            .collect();
-        app.home
-            .discover
-            .insert((*term).to_string(), Loadable::Loaded(matching));
-    }
+    app.home.latest_albums = Loadable::Loaded((0..8).map(album).collect());
 
     // Search.
     app.search.query = "Bonobo".into();
@@ -560,7 +548,7 @@ pub fn populate(app: &mut App) {
     app.devices = vec![
         Device {
             id: Some("local-demo".into()),
-            name: "Spotifast".into(),
+            name: "Jellifast".into(),
             is_active: false,
             is_restricted: false,
             volume_percent: Some(70),
@@ -586,14 +574,6 @@ pub fn populate(app: &mut App) {
             kind: "smartphone".into(),
         },
     ];
-    // Include an unsigned ZeroConf receiver in the device picker.
-    app.receivers = vec![crate::zeroconf::Receiver {
-        name: "House Spotify".into(),
-        device_id: Some("house-speaker".into()),
-        address: std::net::IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 42)),
-        port: 5555,
-        path: "/zc".into(),
-    }];
     app.remote = Some(RemoteSnapshot {
         state: PlaybackState {
             device: Some(app.devices[1].clone()),
@@ -711,7 +691,7 @@ fn demo_sound() -> Vec<f64> {
         (8372.0, 0.03),
         (11175.3, 0.01),
     ];
-    let rate = f64::from(librespot_playback::SAMPLE_RATE);
+    let rate = f64::from(crate::audio::SAMPLE_RATE);
     let mut seed = 0x2545_f491_u32;
     let mut white = move || {
         seed ^= seed << 13;
@@ -722,7 +702,7 @@ fn demo_sound() -> Vec<f64> {
     // Paul Kellet's economy filter turns white noise pink; the difference
     // of two white samples leaves only the treble, like a hi-hat.
     let (mut b0, mut b1, mut b2, mut last) = (0.0, 0.0, 0.0, 0.0);
-    (0..librespot_playback::SAMPLE_RATE as usize / 2)
+    (0..crate::audio::SAMPLE_RATE as usize / 2)
         .flat_map(|index| {
             let time = index as f64 / rate;
             let noise = white();
@@ -878,7 +858,7 @@ pub fn apply_flags(app: &mut App, page: Option<&str>, show: Option<&str>) {
             }
             "shuffle-started" => {
                 app.apply(
-                    Action::ShufflePlay("spotify:playlist:pl0".into()),
+                    Action::ShufflePlay("jellyfin:playlist:pl0".into()),
                     &egui::Context::default(),
                 );
             }
@@ -908,10 +888,9 @@ pub fn apply_flags(app: &mut App, page: Option<&str>, show: Option<&str>) {
             "update" => {
                 app.update = Some(crate::updates::Release {
                     version: "0.7.1".into(),
-                    url: "https://spotifast.rocks/download/".into(),
+                    url: "https://github.com/j4ckxyz/jellifast/releases".into(),
                 });
             }
-            "personal-app" => app.dialog = Some(Dialog::PersonalAppIntro),
             "many-devices" => {
                 app.show_devices = true;
                 app.devices.extend((0..40).map(|index| Device {
@@ -922,7 +901,6 @@ pub fn apply_flags(app: &mut App, page: Option<&str>, show: Option<&str>) {
                 }));
             }
             "shortcuts" => app.dialog = Some(Dialog::Shortcuts),
-            "premium" => app.dialog = Some(Dialog::PremiumNeeded),
             "edit" => {
                 app.dialog = Some(Dialog::EditPlaylist {
                     id: "pl1".into(),
@@ -936,7 +914,7 @@ pub fn apply_flags(app: &mut App, page: Option<&str>, show: Option<&str>) {
                 app.dialog = Some(Dialog::CreatePlaylist {
                     name: "Autumn drives".into(),
                     public: false,
-                    add_uris: vec!["spotify:track:trk1".into()],
+                    add_uris: vec!["jellyfin:track:trk1".into()],
                 })
             }
             "duplicate" => {
@@ -945,7 +923,7 @@ pub fn apply_flags(app: &mut App, page: Option<&str>, show: Option<&str>) {
                     playlist_id: "pl1".into(),
                     playlist_name: "Long Way Home".into(),
                     items: vec![PlayableItem::Track(track(1))],
-                    duplicate_uris: vec!["spotify:track:trk1".into()],
+                    duplicate_uris: vec!["jellyfin:track:trk1".into()],
                 })
             }
             // A Spotify mix whose songs carry only the epoch Spotify stamps on
@@ -987,16 +965,16 @@ pub fn apply_flags(app: &mut App, page: Option<&str>, show: Option<&str>) {
             // has is the song the last session ended on.
             "resume" => {
                 app.remote = None;
-                app.resume_context = Some("spotify:playlist:pl1".into());
-                app.resume_track = Some("spotify:track:trk0".into());
+                app.resume_context = Some("jellyfin:playlist:pl1".into());
+                app.resume_track = Some("jellyfin:track:trk0".into());
                 app.resume_position_ms = 19_566;
             }
             // The same cold start, one press of Next in: the song moved on
             // and nothing started playing.
             "resume-next" => {
                 app.remote = None;
-                app.resume_context = Some("spotify:playlist:pl1".into());
-                app.resume_track = Some("spotify:track:trk0".into());
+                app.resume_context = Some("jellyfin:playlist:pl1".into());
+                app.resume_track = Some("jellyfin:track:trk0".into());
                 app.resume_position_ms = 19_566;
                 app.actions.push(Action::Next);
             }
@@ -1020,7 +998,7 @@ pub fn apply_flags(app: &mut App, page: Option<&str>, show: Option<&str>) {
             "art" => app.settings.art_expanded = true,
             "folders" => {
                 use crate::player::RootlistEntry;
-                let uri = |index: usize| format!("spotify:playlist:pl{index}");
+                let uri = |index: usize| format!("jellyfin:playlist:pl{index}");
                 app.rootlist = vec![
                     RootlistEntry::FolderStart {
                         id: "f1".into(),
@@ -1052,8 +1030,10 @@ pub fn apply_flags(app: &mut App, page: Option<&str>, show: Option<&str>) {
             }
             "milkdrop" => app.settings.milkdrop_open = true,
             "pins" => {
-                app.settings.pinned_contexts =
-                    vec!["spotify:playlist:pl2".into(), "spotify:playlist:pl4".into()];
+                app.settings.pinned_contexts = vec![
+                    "jellyfin:playlist:pl2".into(),
+                    "jellyfin:playlist:pl4".into(),
+                ];
             }
             "sorted" => {
                 app.table_sorts.insert(
@@ -1212,12 +1192,6 @@ pub fn apply_flags(app: &mut App, page: Option<&str>, show: Option<&str>) {
                     }
                 }
             }
-            // A Spotify app of one's own, in use.
-            "faster" => {
-                let id = "8f2c1d0e4a6b4c3d9e7f5a1b2c3d4e5f".to_string();
-                app.settings.web_client_id = Some(id.clone());
-                app.web_app = Some(id);
-            }
             _ => {}
         }
     }
@@ -1233,7 +1207,7 @@ mod tests {
 
     fn accessible_app(name: &str) -> (egui::Context, App) {
         let root =
-            std::env::temp_dir().join(format!("spotifast-a11y-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-a11y-{name}-{}", std::process::id()));
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         let waker = crate::backend::Waker::default();
@@ -1989,8 +1963,10 @@ mod tests {
         use crate::settings::{LibraryShelf, LibrarySort};
         use egui::accesskit::{Action as AccessibleAction, Role};
         let (ctx, mut app) = accessible_app("library-sort");
-        app.settings.sidebar_order =
-            vec!["spotify:playlist:pl4".into(), "spotify:playlist:pl1".into()];
+        app.settings.sidebar_order = vec![
+            "jellyfin:playlist:pl4".into(),
+            "jellyfin:playlist:pl1".into(),
+        ];
         let saved = app.settings.sidebar_order.clone();
         accessible_frame(&ctx, &mut app, vec![]);
         let tree = accessible_frame(&ctx, &mut app, vec![]);
@@ -2166,44 +2142,6 @@ mod tests {
             "{:?}",
             app.actions
         );
-        app.backend.shutdown();
-    }
-
-    /// Spotify lists audiobooks among saved shows, but librespot can't play
-    /// them, so the Podcasts shelf leaves out any show marked as one.
-    #[test]
-    fn the_podcasts_shelf_leaves_out_audiobooks() {
-        let (ctx, mut app) = accessible_app("library-podcasts-audiobooks");
-        let view = crate::ui::sidebar::show;
-        view_frame(&ctx, &mut app, vec![], view);
-        let painted = view_frame(&ctx, &mut app, vec![], view);
-        let chip = painted
-            .iter()
-            .find(|(text, _)| text == "Podcasts")
-            .unwrap()
-            .1
-            .center();
-        view_frame(
-            &ctx,
-            &mut app,
-            pointer_click(chip, egui::PointerButton::Primary),
-            view,
-        );
-        let shows: Vec<(String, String)> = app
-            .library
-            .shows
-            .items
-            .iter()
-            .map(|saved| (saved.show.uri.clone(), saved.show.name.clone()))
-            .collect();
-        assert!(shows.len() >= 2, "the demo library saves several shows");
-        let painted = view_frame(&ctx, &mut app, vec![], view);
-        assert!(painted.iter().any(|(text, _)| *text == shows[0].1));
-
-        app.audiobook_shows.insert(shows[0].0.clone());
-        let painted = view_frame(&ctx, &mut app, vec![], view);
-        assert!(!painted.iter().any(|(text, _)| *text == shows[0].1));
-        assert!(painted.iter().any(|(text, _)| *text == shows[1].1));
         app.backend.shutdown();
     }
 
@@ -2435,7 +2373,7 @@ mod tests {
         };
         app.actions.clear();
         let song = PlayableItem::Track(Track {
-            uri: "spotify:track:art-drop".into(),
+            uri: "jellyfin:track:art-drop".into(),
             name: "Art drop".into(),
             ..Default::default()
         });
@@ -2459,7 +2397,7 @@ mod tests {
             egui::DragAndDrop::set_payload(
                 &ctx,
                 DragEntry {
-                    uri: "spotify:playlist:pl1".into(),
+                    uri: "jellyfin:playlist:pl1".into(),
                     title: "Late night focus".into(),
                     image: None,
                 },
@@ -2504,7 +2442,7 @@ mod tests {
                 title: "Art drop".into(),
                 image: None,
                 items: vec![PlayableItem::Track(Track {
-                    uri: "spotify:track:highlight".into(),
+                    uri: "jellyfin:track:highlight".into(),
                     ..Default::default()
                 })],
                 from: None,
@@ -2584,7 +2522,7 @@ mod tests {
         );
         assert_eq!(
             app.playing_context_uri().as_deref(),
-            Some("spotify:playlist:pl2")
+            Some("jellyfin:playlist:pl2")
         );
         assert_eq!(app.page(), &Page::Playlist("pl2".into()));
         app.backend.shutdown();
@@ -2620,7 +2558,6 @@ mod tests {
         for (shelf, label, page) in [
             (LibraryShelf::Albums, "Albums", Page::Albums),
             (LibraryShelf::Artists, "Artists", Page::Artists),
-            (LibraryShelf::Podcasts, "Podcasts", Page::Podcasts),
         ] {
             let (ctx, mut app) = accessible_app(&format!("library-sort-paging-{shelf:?}"));
             let view = crate::ui::sidebar::show;
@@ -2667,53 +2604,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn personal_app_intro_can_be_dismissed_or_open_setup_with_keyboard_focus() {
-        use egui::accesskit::{Action as AccessibleAction, Role};
-
-        for setup in [false, true] {
-            let (ctx, mut app) = accessible_app(&format!("personal-app-intro-{setup}"));
-            app.dialog = Some(Dialog::PersonalAppIntro);
-            accessible_frame(&ctx, &mut app, vec![]);
-            let tree = accessible_frame(&ctx, &mut app, vec![]);
-            let button = accessible_node(
-                &tree,
-                if setup {
-                    "Set up personal app"
-                } else {
-                    "Keep shared app"
-                },
-                Role::Button,
-            );
-            accessible_frame(
-                &ctx,
-                &mut app,
-                vec![accessible_action(button, AccessibleAction::Click, None)],
-            );
-            assert!(app.dialog.is_none());
-            assert!(app.settings.personal_app_intro_seen);
-            if setup {
-                assert_eq!(app.page(), &Page::Settings);
-                accessible_frame(&ctx, &mut app, vec![]);
-                assert!(
-                    ctx.memory(|memory| memory.has_focus(egui::Id::new("personal-web-client-id")))
-                );
-            }
-            app.backend.shutdown();
-        }
-        let (ctx, mut app) = accessible_app("personal-app-intro-escape");
-        app.dialog = Some(Dialog::PersonalAppIntro);
-        accessible_frame(&ctx, &mut app, vec![]);
-        accessible_frame(
-            &ctx,
-            &mut app,
-            vec![keyboard(egui::Key::Escape, egui::Modifiers::NONE)],
-        );
-        assert!(app.dialog.is_none());
-        assert!(app.settings.personal_app_intro_seen);
-        app.backend.shutdown();
-    }
-
     fn settings_filter(ctx: &egui::Context) -> String {
         ctx.data_mut(|data| {
             data.get_temp::<String>(egui::Id::new("settings-filter"))
@@ -2731,7 +2621,7 @@ mod tests {
             url: "https://example.invalid/release".into(),
         });
         let installation = Installation {
-            executable: std::path::PathBuf::from("/test/spotifast"),
+            executable: std::path::PathBuf::from("/test/jellifast"),
             kind: Kind::Portable,
         };
         app.update_support = Some(Ok(installation.clone()));
@@ -2948,49 +2838,6 @@ mod tests {
         app.backend.shutdown();
     }
 
-    #[test]
-    fn personal_app_setup_clears_a_saved_settings_search() {
-        use egui::accesskit::{Action as AccessibleAction, Role};
-        let (ctx, mut app) = accessible_app("settings-search-setup");
-        app.open(Page::Settings);
-        accessible_frame(&ctx, &mut app, vec![]);
-        let tree = accessible_frame(&ctx, &mut app, vec![]);
-        let field = accessible_node(&tree, "Search settings", Role::TextInput);
-        // Search for something that hides the Account section...
-        accessible_frame(
-            &ctx,
-            &mut app,
-            vec![accessible_action(field, AccessibleAction::Focus, None)],
-        );
-        accessible_frame(&ctx, &mut app, vec![egui::Event::Text("theme".into())]);
-        assert_eq!(settings_filter(&ctx), "theme");
-        // ...leave Settings...
-        app.open(Page::Home);
-        accessible_frame(&ctx, &mut app, vec![]);
-        // ...and enter Personal App setup, which must reveal and focus
-        // the Client ID field instead of landing on a filtered-out row.
-        app.dialog = Some(Dialog::PersonalAppIntro);
-        accessible_frame(&ctx, &mut app, vec![]);
-        let tree = accessible_frame(&ctx, &mut app, vec![]);
-        let setup = accessible_node(&tree, "Set up personal app", Role::Button);
-        accessible_frame(
-            &ctx,
-            &mut app,
-            vec![accessible_action(setup, AccessibleAction::Click, None)],
-        );
-        assert_eq!(app.page(), &Page::Settings);
-        assert!(
-            settings_filter(&ctx).is_empty(),
-            "setup must drop the saved search so its row is visible"
-        );
-        accessible_frame(&ctx, &mut app, vec![]);
-        assert!(
-            ctx.memory(|memory| memory.has_focus(egui::Id::new("personal-web-client-id"))),
-            "the Client ID field takes focus once its row is visible"
-        );
-        app.backend.shutdown();
-    }
-
     fn settings_text(ctx: &egui::Context, app: &mut App, query: &str) -> Vec<String> {
         ctx.data_mut(|data| {
             data.insert_temp(egui::Id::new("settings-filter"), query.to_owned());
@@ -3087,58 +2934,6 @@ mod tests {
             crate::backend::LocalPlayback::Failed("Test connection failure".into());
         let text = settings_text(&ctx, &mut app, "connection failure");
         assert!(text.iter().any(|text| text == "Status: Unavailable"));
-        app.backend.shutdown();
-    }
-
-    #[test]
-    fn settings_search_never_shows_a_section_for_an_unavailable_row() {
-        let (ctx, mut app) = accessible_app("settings-search-availability");
-        let text = settings_text(&ctx, &mut app, "Show in taskbar");
-        assert_eq!(
-            text.iter().any(|text| text == "Winamp skins"),
-            cfg!(windows)
-        );
-        if !cfg!(windows) {
-            assert!(text.iter().any(|text| text.starts_with("No settings for")));
-        }
-        app.demo_windows_controls = true;
-        let text = settings_text(&ctx, &mut app, "Show in taskbar");
-        assert!(text.iter().any(|text| text == "Winamp skins"));
-        assert!(text.iter().any(|text| text == "Show in taskbar"));
-
-        app.settings.web_client_id = None;
-        app.web_app = None;
-        let text = settings_text(&ctx, &mut app, "Personal app ready");
-        assert!(!text.iter().any(|text| text == "Account"));
-        assert!(text.iter().any(|text| text.starts_with("No settings for")));
-        app.settings.web_client_id = Some("test-client".into());
-        app.web_app = Some("test-client".into());
-        let text = settings_text(&ctx, &mut app, "Personal app ready");
-        assert!(text.iter().any(|text| text == "Personal app ready"));
-        app.backend.shutdown();
-    }
-
-    #[test]
-    fn create_an_app_row_hides_once_the_personal_app_is_ready() {
-        let (ctx, mut app) = accessible_app("settings-create-app");
-        app.settings.web_client_id = None;
-        app.web_app = None;
-        let text = settings_text(&ctx, &mut app, "Account");
-        assert!(text.iter().any(|text| text == "Create an app"));
-
-        app.settings.web_client_id = Some("test-client".into());
-        let text = settings_text(&ctx, &mut app, "Account");
-        assert!(text.iter().any(|text| text == "Create an app"));
-        assert!(
-            text.iter()
-                .any(|text| text == "Authorize your personal app")
-        );
-
-        app.web_app = Some("test-client".into());
-        let text = settings_text(&ctx, &mut app, "Account");
-        assert!(text.iter().any(|text| text == "Personal app ready"));
-        assert!(!text.iter().any(|text| text == "Create an app"));
-        assert!(!text.iter().any(|text| text == "Setup guide"));
         app.backend.shutdown();
     }
 
@@ -3707,7 +3502,6 @@ mod tests {
         app.backend.set_offline(true);
         app.show_devices = true;
         app.local_ready = true;
-        app.receivers.clear();
         app.devices = (0..40)
             .map(|index| Device {
                 id: Some(format!("speaker-{index}")),
@@ -3812,7 +3606,7 @@ mod tests {
             let owner = app.user_id().unwrap().to_string();
             let make = |id: &str, name: &str, owned: bool, collaborative| Playlist {
                 id: id.into(),
-                uri: format!("spotify:playlist:{id}"),
+                uri: format!("jellyfin:playlist:{id}"),
                 name: name.into(),
                 owner: crate::api::models::Owner {
                     id: Some(if owned {
@@ -3918,7 +3712,7 @@ mod tests {
         let owner = app.user_id().unwrap().to_string();
         let make = |id: &str, name: &str| Playlist {
             id: id.into(),
-            uri: format!("spotify:playlist:{id}"),
+            uri: format!("jellyfin:playlist:{id}"),
             name: name.into(),
             owner: crate::api::models::Owner {
                 id: Some(owner.clone()),
@@ -4212,18 +4006,18 @@ mod tests {
             ArtistRef {
                 id: Some("first".into()),
                 name: "Tyler, the Creator".into(),
-                uri: Some("spotify:artist:first".into()),
+                uri: Some("jellyfin:artist:first".into()),
             },
             ArtistRef {
                 id: Some("guest".into()),
                 name: "Guest".into(),
-                uri: Some("spotify:artist:guest".into()),
+                uri: Some("jellyfin:artist:guest".into()),
             },
         ];
         app.local = LocalState {
             playback: Playback::Playing,
             track: Some(LocalTrack {
-                uri: "spotify:track:uncached".into(),
+                uri: "jellyfin:track:uncached".into(),
                 title: "Song".into(),
                 artists: artists.clone(),
                 duration_ms: 200_000,
@@ -4281,7 +4075,7 @@ mod tests {
                     .map(|index| ArtistRef {
                         id: Some(format!("artist-{index}")),
                         name: format!("Artist {index}"),
-                        uri: Some(format!("spotify:artist:artist-{index}")),
+                        uri: Some(format!("jellyfin:artist:artist-{index}")),
                     })
                     .collect();
                 let item = PlayableItem::Track(song);
@@ -4890,7 +4684,7 @@ mod tests {
             crate::ui::settings::show,
         );
         assert!(app.actions.iter().any(|action| matches!(action,
-            Action::OpenUrl(url) if url == "https://spotifast.rocks/settings-and-files/#custom-themes")));
+            Action::OpenUrl(url) if url.ends_with("settings-and-files.md#custom-themes"))));
         app.backend.shutdown();
     }
 
@@ -5111,14 +4905,9 @@ mod tests {
                     "Go to artist",
                     "Go to album",
                 ][..],
-                "artist" => &["Play", "Follow"][..],
-                "album" => &[
-                    "Play",
-                    "Shuffle play",
-                    "Add to queue",
-                    "Add to Your Library",
-                ][..],
-                _ => &["Play", "Add to Your Library"][..],
+                "artist" => &["Play", "Add to favorites"][..],
+                "album" => &["Play", "Shuffle play", "Add to queue", "Add to favorites"][..],
+                _ => &["Play", "Add to favorites"][..],
             };
             for label in expected {
                 assert!(
@@ -5153,7 +4942,7 @@ mod tests {
             item.artists = vec![ArtistRef {
                 id: artist_id.map(str::to_string),
                 name: "Ween".into(),
-                uri: artist_id.map(|id| format!("spotify:artist:{id}")),
+                uri: artist_id.map(|id| format!("jellyfin:artist:{id}")),
             }];
             app.search.results = Loadable::Loaded(SearchResults {
                 tracks: Some(page(vec![item])),
@@ -5271,14 +5060,14 @@ mod tests {
                 "Artists",
                 artist(1).name,
                 artist(1).uri,
-                vec!["Follow"],
+                vec!["Add to favorites"],
             ),
             (
                 Page::Podcasts,
                 "Podcasts",
                 show(1).name,
                 show(1).uri,
-                vec!["Add to Your Library"],
+                vec!["Add to favorites"],
             ),
             (
                 Page::Artist("art0".into()),
@@ -5292,7 +5081,7 @@ mod tests {
                 "Fans also like",
                 artist(2).name,
                 artist(2).uri,
-                vec!["Follow"],
+                vec!["Add to favorites"],
             ),
         ] {
             let (ctx, mut app) = accessible_app(&format!("library-card-{section}"));
@@ -5316,13 +5105,13 @@ mod tests {
                 SearchFilter::Artists,
                 artist(1).name,
                 artist(1).uri,
-                vec!["Follow"],
+                vec!["Add to favorites"],
             ),
             (
                 SearchFilter::Albums,
                 album(0).name,
                 album(0).uri,
-                vec!["Add to queue", "Add to Your Library"],
+                vec!["Add to queue", "Add to favorites"],
             ),
             (
                 SearchFilter::Playlists,
@@ -5334,7 +5123,7 @@ mod tests {
                 SearchFilter::Podcasts,
                 show(0).name,
                 show(0).uri,
-                vec!["Add to Your Library"],
+                vec!["Add to favorites"],
             ),
         ] {
             for selected in [SearchFilter::All, filter] {
@@ -5379,7 +5168,7 @@ mod tests {
             view_frame(&ctx, &mut app, vec![], view);
             let text = view_frame(&ctx, &mut app, vec![], view);
             for (label, expected) in [
-                ("Made for you", made_for_you),
+                ("Recently added", made_for_you),
                 ("Recommended for you", recommendations),
                 ("Liked Songs", true),
                 ("Recently played", true),
@@ -5409,13 +5198,13 @@ mod tests {
                 crate::util::greeting(crate::i18n::Locale::English),
                 playlist(0).name,
                 playlist(0).uri,
-                vec!["Remove from Your Library"],
+                vec!["Remove from favorites"],
             ),
             (
-                "Made for you".into(),
-                playlist(0).name,
-                playlist(0).uri,
-                vec!["Remove from Your Library"],
+                "Recently added".into(),
+                album(0).name,
+                album(0).uri,
+                vec!["Add to queue"],
             ),
             (
                 "Recently played".into(),
@@ -5427,7 +5216,7 @@ mod tests {
                 "Your top artists".into(),
                 artist(1).name,
                 artist(1).uri,
-                vec!["Follow"],
+                vec!["Add to favorites"],
             ),
         ] {
             let (ctx, mut app) = accessible_app(&format!("home-card-{section}-{title}"));
@@ -5498,7 +5287,7 @@ mod tests {
     #[test]
     fn a_toast_is_wide_enough_to_read() {
         let root =
-            std::env::temp_dir().join(format!("spotifast-toast-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-toast-test-{}", std::process::id()));
         let dirs = AppDirs {
             config: root.join("config"),
             state: root.join("state"),
@@ -5572,7 +5361,7 @@ mod tests {
     #[test]
     fn the_shortcuts_dialog_fits_a_small_window() {
         let root =
-            std::env::temp_dir().join(format!("spotifast-shortcuts-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-shortcuts-test-{}", std::process::id()));
         let dirs = AppDirs {
             config: root.join("config"),
             state: root.join("state"),
@@ -5625,7 +5414,7 @@ mod tests {
     #[test]
     fn interface_zoom_puts_minus_on_the_left() {
         let root =
-            std::env::temp_dir().join(format!("spotifast-zoom-order-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-zoom-order-test-{}", std::process::id()));
         let dirs = AppDirs {
             config: root.join("config"),
             state: root.join("state"),
@@ -5706,7 +5495,7 @@ mod tests {
     #[test]
     fn the_frame_rate_dial_steps_between_its_stops() {
         let root =
-            std::env::temp_dir().join(format!("spotifast-fps-dial-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-fps-dial-test-{}", std::process::id()));
         let dirs = AppDirs {
             config: root.join("config"),
             state: root.join("state"),
@@ -5787,7 +5576,7 @@ mod tests {
     #[test]
     fn the_narrowest_panels_keep_their_headers_on_one_row() {
         let root = std::env::temp_dir().join(format!(
-            "spotifast-queue-header-test-{}",
+            "jellifast-queue-header-test-{}",
             std::process::id()
         ));
         let dirs = AppDirs {
@@ -5883,7 +5672,7 @@ mod tests {
     #[test]
     fn the_queue_names_where_the_song_plays_from() {
         let root = std::env::temp_dir().join(format!(
-            "spotifast-playing-from-test-{}",
+            "jellifast-playing-from-test-{}",
             std::process::id()
         ));
         let dirs = AppDirs {
@@ -5967,7 +5756,7 @@ mod tests {
         // A song radio is named after its song.
         if let Some(remote) = app.remote.as_mut() {
             remote.state.context = Some(Context {
-                uri: "spotify:station:track:trk0".into(),
+                uri: "jellyfin:station:track:trk0".into(),
                 kind: "station".into(),
             });
         }
@@ -6135,7 +5924,7 @@ mod tests {
     #[test]
     fn fullscreen_lyrics_highlight_preserves_line_layout() {
         let root =
-            std::env::temp_dir().join(format!("spotifast-lyrics-layout-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-lyrics-layout-{}", std::process::id()));
         let ctx = egui::Context::default();
         let waker = crate::backend::Waker::default();
         waker.attach(&ctx);
@@ -6205,7 +5994,7 @@ mod tests {
     #[test]
     fn every_surface_renders_headless() {
         let root =
-            std::env::temp_dir().join(format!("spotifast-render-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-render-test-{}", std::process::id()));
         let dirs = AppDirs {
             config: root.join("config"),
             state: root.join("state"),
@@ -6299,7 +6088,7 @@ mod tests {
                 playlist_id: "pl1".into(),
                 playlist_name: "x".into(),
                 items: vec![PlayableItem::Track(track(1))],
-                duplicate_uris: vec!["spotify:track:trk1".into()],
+                duplicate_uris: vec!["jellyfin:track:trk1".into()],
             },
         ] {
             app.dialog = Some(dialog);
@@ -6323,7 +6112,7 @@ mod tests {
     #[test]
     fn a_long_virtual_queue_and_library_still_draw() {
         let root =
-            std::env::temp_dir().join(format!("spotifast-virtual-long-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-virtual-long-{}", std::process::id()));
         let dirs = AppDirs {
             config: root.join("config"),
             state: root.join("state"),
@@ -6389,7 +6178,7 @@ mod tests {
 
     fn drop_songs_on_sidebar(count: usize) {
         let root = std::env::temp_dir().join(format!(
-            "spotifast-drag-test-{}-{count}",
+            "jellifast-drag-test-{}-{count}",
             std::process::id()
         ));
         let dirs = AppDirs {
@@ -6425,13 +6214,13 @@ mod tests {
         let mut dragged = vec![
             PlayableItem::Track(Track {
                 id: Some("not-in-demo-playlists".into()),
-                uri: "spotify:track:not-in-demo-playlists".into(),
+                uri: "jellyfin:track:not-in-demo-playlists".into(),
                 name: "A new song".into(),
                 ..Default::default()
             }),
             PlayableItem::Track(Track {
                 id: Some("also-not-in-demo-playlists".into()),
-                uri: "spotify:track:also-not-in-demo-playlists".into(),
+                uri: "jellyfin:track:also-not-in-demo-playlists".into(),
                 name: "Another new song".into(),
                 ..Default::default()
             }),
@@ -6500,7 +6289,7 @@ mod tests {
                 tracks.items.truncate(3);
                 for (index, name) in ["Charlie", "Bravo", "Alpha"].iter().enumerate() {
                     tracks.items[index].name = name.to_string();
-                    tracks.items[index].uri = format!("spotify:track:source{index}");
+                    tracks.items[index].uri = format!("jellyfin:track:source{index}");
                     tracks.items[index].id = Some(format!("source{index}"));
                 }
                 tracks.total = Some(3);
@@ -6593,9 +6382,9 @@ mod tests {
                 let payload = egui::DragAndDrop::payload::<DragTrack>(&ctx)
                     .expect("drag from a selected row");
                 let expected = if sorted {
-                    ["spotify:track:source2", "spotify:track:source0"]
+                    ["jellyfin:track:source2", "jellyfin:track:source0"]
                 } else {
-                    ["spotify:track:source0", "spotify:track:source2"]
+                    ["jellyfin:track:source0", "jellyfin:track:source2"]
                 };
                 assert_eq!(
                     payload
@@ -6669,7 +6458,7 @@ mod tests {
             let [first, second] = double_click(name);
             view_frame(&ctx, &mut app, first, view);
             view_frame(&ctx, &mut app, second, view);
-            assert_eq!(played_contexts(&app), ["spotify:playlist:pl2"]);
+            assert_eq!(played_contexts(&app), ["jellyfin:playlist:pl2"]);
             assert!(
                 app.actions.iter().any(
                     |action| matches!(action, Action::Open(Page::Playlist(id)) if id == "pl2")
@@ -6715,7 +6504,7 @@ mod tests {
         let [first, second] = double_click(name);
         view_frame(&ctx, &mut app, first, view);
         view_frame(&ctx, &mut app, second, view);
-        assert_eq!(played_contexts(&app), ["spotify:user:demo:collection"]);
+        assert_eq!(played_contexts(&app), ["jellyfin:user:demo:collection"]);
         app.backend.shutdown();
     }
 
@@ -6728,8 +6517,8 @@ mod tests {
                 id: "f1".into(),
                 name: "Focus".into(),
             },
-            RootlistEntry::Playlist("spotify:playlist:pl1".into()),
-            RootlistEntry::Playlist("spotify:playlist:pl2".into()),
+            RootlistEntry::Playlist("jellyfin:playlist:pl1".into()),
+            RootlistEntry::Playlist("jellyfin:playlist:pl2".into()),
             RootlistEntry::FolderEnd,
         ];
         let view = crate::ui::sidebar::show;
@@ -6759,11 +6548,11 @@ mod tests {
         app.actions.clear();
         let [first, second] = double_click(cover);
         view_frame(&ctx, &mut app, first, view);
-        assert_eq!(played_contexts(&app), ["spotify:playlist:pl2"]);
+        assert_eq!(played_contexts(&app), ["jellyfin:playlist:pl2"]);
         view_frame(&ctx, &mut app, second, view);
         assert_eq!(
             played_contexts(&app),
-            ["spotify:playlist:pl2"],
+            ["jellyfin:playlist:pl2"],
             "the second click must not play again"
         );
         app.backend.shutdown();
@@ -6802,7 +6591,7 @@ mod tests {
     #[test]
     fn dragging_the_now_playing_song_supplies_a_playlist_row() {
         let root = std::env::temp_dir().join(format!(
-            "spotifast-now-playing-drag-test-{}",
+            "jellifast-now-playing-drag-test-{}",
             std::process::id()
         ));
         let dirs = AppDirs {
@@ -6852,7 +6641,7 @@ mod tests {
         let payload = egui::DragAndDrop::payload::<DragTrack>(&ctx)
             .expect("dragging the bottom-left song should create a song payload");
         assert_eq!(payload.items.len(), 1);
-        assert_eq!(payload.items[0].uri(), "spotify:track:trk0");
+        assert_eq!(payload.items[0].uri(), "jellyfin:track:trk0");
         assert_eq!(payload.from, None, "this is an add, not a playlist move");
 
         egui::DragAndDrop::clear_payload(&ctx);
@@ -7033,7 +6822,7 @@ mod tests {
         let songs: Vec<Track> = (0..3)
             .map(|index| {
                 let mut t = track(index);
-                t.uri = format!("spotify:track:queued{index}");
+                t.uri = format!("jellyfin:track:queued{index}");
                 t.id = Some(format!("queued{index}"));
                 t.name = format!("Queued {index}");
                 t
@@ -7228,7 +7017,7 @@ mod tests {
         app.backend.shutdown();
     }
 
-    /// "Next up" plays from the current context, not from a list Spotifast
+    /// "Next up" plays from the current context, not from a list Jellifast
     /// can rewrite, so it is never a drop target: dropping a queued row on
     /// it must not move or insert anything, even though the row sits inside
     /// the same scrollable list as "Playing next".
@@ -7341,7 +7130,7 @@ mod tests {
         let songs: Vec<Track> = (3..40)
             .map(|index| {
                 let mut t = track(index);
-                t.uri = format!("spotify:track:queued{index}");
+                t.uri = format!("jellyfin:track:queued{index}");
                 t.id = Some(format!("queued{index}"));
                 t.name = format!("Queued {index}");
                 t
@@ -7734,7 +7523,7 @@ mod tests {
     #[test]
     fn dragging_within_the_pinned_block_reorders_it() {
         let root =
-            std::env::temp_dir().join(format!("spotifast-reorder-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-reorder-test-{}", std::process::id()));
         let dirs = AppDirs {
             config: root.join("config"),
             state: root.join("state"),
@@ -7755,8 +7544,10 @@ mod tests {
         );
         app.attach(&ctx);
         populate(&mut app);
-        app.settings.pinned_contexts =
-            vec!["spotify:playlist:pl2".into(), "spotify:playlist:pl4".into()];
+        app.settings.pinned_contexts = vec![
+            "jellyfin:playlist:pl2".into(),
+            "jellyfin:playlist:pl4".into(),
+        ];
         for _ in 0..3 {
             frame(&ctx, &mut app);
         }
@@ -7770,7 +7561,7 @@ mod tests {
             egui::DragAndDrop::set_payload(
                 &ctx,
                 DragEntry {
-                    uri: "spotify:playlist:pl4".into(),
+                    uri: "jellyfin:playlist:pl4".into(),
                     title: "Release Radar".into(),
                     image: None,
                 },
@@ -7788,7 +7579,7 @@ mod tests {
             );
             egui::DragAndDrop::clear_payload(&ctx);
             if app.settings.pinned_contexts.first().map(String::as_str)
-                == Some("spotify:playlist:pl4")
+                == Some("jellyfin:playlist:pl4")
             {
                 dropped = true;
                 break;
@@ -7798,9 +7589,9 @@ mod tests {
         assert_eq!(
             app.settings.pinned_contexts,
             vec![
-                "spotify:playlist:pl4".to_string(),
+                "jellyfin:playlist:pl4".to_string(),
                 crate::settings::LIKED_SONGS_KEY.to_string(),
-                "spotify:playlist:pl2".to_string(),
+                "jellyfin:playlist:pl2".to_string(),
             ],
         );
         assert!(app.settings.sidebar_order.is_empty());
@@ -7812,7 +7603,7 @@ mod tests {
     #[test]
     fn dropping_between_unpinned_playlists_creates_the_custom_order() {
         let root =
-            std::env::temp_dir().join(format!("spotifast-unpinned-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("jellifast-unpinned-test-{}", std::process::id()));
         let dirs = AppDirs {
             config: root.join("config"),
             state: root.join("state"),
@@ -7848,7 +7639,7 @@ mod tests {
             egui::DragAndDrop::set_payload(
                 &ctx,
                 DragEntry {
-                    uri: "spotify:playlist:pl4".into(),
+                    uri: "jellyfin:playlist:pl4".into(),
                     title: "Release Radar".into(),
                     image: None,
                 },
@@ -7874,7 +7665,7 @@ mod tests {
         let expected: Vec<String> = [0, 4]
             .into_iter()
             .chain((1..PLAYLISTS.len()).filter(|index| *index != 4))
-            .map(|index| format!("spotify:playlist:pl{index}"))
+            .map(|index| format!("jellyfin:playlist:pl{index}"))
             .collect();
         assert_eq!(app.settings.sidebar_order, expected);
         assert_eq!(
@@ -7893,10 +7684,10 @@ mod tests {
             let (ctx, mut app) = accessible_app(&format!("liked-drag-{compact}"));
             app.settings.sidebar_compact = compact;
             app.rootlist.clear();
-            app.settings.pinned_contexts = vec!["spotify:playlist:pl2".into()];
+            app.settings.pinned_contexts = vec!["jellyfin:playlist:pl2".into()];
             app.settings.sidebar_order = (0..PLAYLISTS.len())
                 .filter(|index| *index != 2)
-                .map(|index| format!("spotify:playlist:pl{index}"))
+                .map(|index| format!("jellyfin:playlist:pl{index}"))
                 .collect();
             let row = |tree: &egui::accesskit::TreeUpdate, label: &str| {
                 let bounds = tree
@@ -7958,9 +7749,9 @@ mod tests {
             assert_eq!(
                 &app.settings.sidebar_order[..3],
                 [
-                    "spotify:playlist:pl0",
+                    "jellyfin:playlist:pl0",
                     LIKED_SONGS_KEY,
-                    "spotify:playlist:pl1"
+                    "jellyfin:playlist:pl1"
                 ]
             );
             let expected = app.settings.sidebar_order.clone();
@@ -7986,7 +7777,7 @@ mod tests {
             );
             assert_eq!(
                 app.settings.library_pins(),
-                ["spotify:playlist:pl2", LIKED_SONGS_KEY]
+                ["jellyfin:playlist:pl2", LIKED_SONGS_KEY]
             );
             assert!(
                 !app.settings
@@ -8015,7 +7806,7 @@ mod tests {
             assert!(!app.settings.liked_songs_pinned);
             let tree = accessible_frame(&ctx, &mut app, vec![]);
             let target = row(&tree, "Liked Songs").center();
-            app.saved.insert("spotify:track:trk0".into(), false);
+            app.saved.insert("jellyfin:track:trk0".into(), false);
             let source = egui::pos2(40.0, 755.0);
             accessible_frame(
                 &ctx,
@@ -8037,7 +7828,7 @@ mod tests {
             );
             assert_eq!(
                 egui::DragAndDrop::payload::<DragTrack>(&ctx).unwrap().items[0].uri(),
-                "spotify:track:trk0"
+                "jellyfin:track:trk0"
             );
             accessible_frame(&ctx, &mut app, vec![egui::Event::PointerMoved(target)]);
             accessible_frame(
@@ -8051,7 +7842,7 @@ mod tests {
                 }],
             );
             assert_eq!(
-                app.is_saved("spotify:track:trk0"),
+                app.is_saved("jellyfin:track:trk0"),
                 Some(true),
                 "dropping a song on the relocated row still saves it"
             );
@@ -8074,7 +7865,7 @@ mod tests {
                     items.items.truncate(4);
                     for (index, row) in items.items.iter_mut().enumerate() {
                         if let Some(PlayableItem::Track(track)) = &mut row.item {
-                            track.uri = format!("spotify:track:destination{index}");
+                            track.uri = format!("jellyfin:track:destination{index}");
                             track.id = Some(format!("destination{index}"));
                             track.name = format!("Destination {index}");
                         }
@@ -8198,7 +7989,7 @@ mod tests {
             let (ctx, mut app) = accessible_app(&format!("playlist-drop-target-{mode}"));
             let mut target = track(0);
             target.name = "Drop target".into();
-            target.uri = "spotify:track:destination".into();
+            target.uri = "jellyfin:track:destination".into();
             let rows = vec![(PlayableItem::Track(target), None, None)];
             if mode == "sorted" {
                 app.table_sorts.insert(
@@ -8228,7 +8019,7 @@ mod tests {
                                 items: if empty { &[] } else { &rows },
                                 row_offset: if mode == "empty" { 0 } else { 100 },
                                 context: crate::model::RowContext::Context {
-                                    uri: "spotify:playlist:pl1".into(),
+                                    uri: "jellyfin:playlist:pl1".into(),
                                     editable_playlist: (mode != "readonly")
                                         .then(|| ("pl1".into(), None)),
                                 },
@@ -8518,7 +8309,7 @@ mod tests {
                 .map(|index| {
                     let mut playlist = playlist(1);
                     playlist.id = format!("target{index}");
-                    playlist.uri = format!("spotify:playlist:target{index}");
+                    playlist.uri = format!("jellyfin:playlist:target{index}");
                     playlist.name = format!("Target {index}");
                     playlist
                 })
@@ -8588,7 +8379,7 @@ mod tests {
     /// before asking the server.
     #[test]
     fn dragging_a_row_within_a_playlist_reorders_it() {
-        let root = std::env::temp_dir().join(format!("spotifast-move-test-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("jellifast-move-test-{}", std::process::id()));
         let dirs = AppDirs {
             config: root.join("config"),
             state: root.join("state"),
@@ -8721,12 +8512,12 @@ mod tests {
         let uri = item.uri().to_string();
         let editable = Some(("pl1".to_string(), None));
         let unsorted = RowContext::Context {
-            uri: "spotify:playlist:pl1".into(),
+            uri: "jellyfin:playlist:pl1".into(),
             editable_playlist: editable.clone(),
         };
         let sorted = RowContext::View {
             uris: Arc::from([uri.clone()]),
-            context_uri: "spotify:playlist:pl1".into(),
+            context_uri: "jellyfin:playlist:pl1".into(),
             editable_playlist: editable.clone(),
         };
         let paint = |ctx: &egui::Context,
@@ -8794,7 +8585,7 @@ mod tests {
         // A view without edit rights offers no removal at all.
         let readonly = RowContext::View {
             uris: Arc::from([uri.clone()]),
-            context_uri: "spotify:playlist:pl1".into(),
+            context_uri: "jellyfin:playlist:pl1".into(),
             editable_playlist: None,
         };
         let painted = paint(&ctx, &mut app, &item, &readonly, vec![]);
@@ -8859,8 +8650,8 @@ mod tests {
     fn custom_sidebar_order_round_trips_through_settings() {
         let settings = Settings {
             sidebar_order: vec![
-                "spotify:playlist:pl4".to_string(),
-                "spotify:playlist:pl0".to_string(),
+                "jellyfin:playlist:pl4".to_string(),
+                "jellyfin:playlist:pl0".to_string(),
             ],
             ..Settings::default()
         };
@@ -8876,7 +8667,7 @@ mod tests {
     #[test]
     fn clicking_search_in_library_shelf_focuses_search_field() {
         let root = std::env::temp_dir().join(format!(
-            "spotifast-sidebar-search-focus-test-{}",
+            "jellifast-sidebar-search-focus-test-{}",
             std::process::id()
         ));
         let dirs = AppDirs {
@@ -8982,7 +8773,7 @@ mod tests {
                     Some("Update ready"),
                     DownloadState::Ready(Box::new(Prepared::sample(
                         Installation {
-                            executable: "/test/spotifast".into(),
+                            executable: "/test/jellifast".into(),
                             kind: Kind::Portable,
                         },
                         "9.9.9",

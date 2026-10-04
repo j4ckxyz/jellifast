@@ -5,7 +5,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 /// Local Library identity only. Never sent to Spotify as a context URI.
-pub const LIKED_SONGS_KEY: &str = "spotifast:liked-songs";
+pub const LIKED_SONGS_KEY: &str = "jellifast:liked-songs";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -25,7 +25,8 @@ pub enum LibrarySort {
     Name,
     RecentlyAdded,
     Local,
-    Spotify,
+    /// The order the server lists playlists in.
+    Server,
 }
 
 impl LibrarySort {
@@ -33,7 +34,7 @@ impl LibrarySort {
         match self {
             Self::RecentlyPlayed | Self::Name | Self::Library => true,
             Self::RecentlyAdded => matches!(shelf, LibraryShelf::Albums | LibraryShelf::Podcasts),
-            Self::Local | Self::Spotify => shelf == LibraryShelf::Playlists,
+            Self::Local | Self::Server => shelf == LibraryShelf::Playlists,
         }
     }
 }
@@ -223,14 +224,15 @@ fn proxy_mode_is_system(mode: &ProxyMode) -> bool {
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    /// The Spotify Connect name other devices see.
+    /// The name the Jellyfin server lists this computer under.
     pub device_name: String,
-    /// 96, 160, or 320 kbps.
+    /// The most the server may send, in kbps: 96, 160 or 320. Zero asks for
+    /// every file as it is.
     pub bitrate: u16,
     pub normalisation: bool,
     pub autoplay: bool,
     pub gapless: bool,
-    /// librespot backend name; `None` picks the platform default.
+    /// Unused: the app has one output. Kept so older settings files read.
     pub audio_backend: Option<String>,
     pub audio_device: Option<String>,
     /// Windows output buffer in milliseconds. Smaller values may click under
@@ -285,16 +287,10 @@ pub struct Settings {
     pub middle_click_autoscroll: bool,
     pub search_history: Vec<String>,
     pub show_shortcut_hints: bool,
-    /// An optional personal Spotify Web API application id. The shared
-    /// application remains active for coverage when this is present.
-    pub web_client_id: Option<String>,
-    /// Legacy reminder time, retained for older Spotifast versions.
-    pub personal_app_nudge_at: Option<String>,
-    /// The listener has dismissed or followed the personal-app introduction.
-    pub personal_app_intro_seen: bool,
-    /// Local playback has been authorized at least once on this machine, so
-    /// the app can resume it silently instead of prompting.
-    pub playback_authorized: bool,
+    /// The server address last signed in to, to fill the sign-in form.
+    pub server: String,
+    /// The user name last signed in with. The password is never kept.
+    pub username: String,
     /// Closing the window hides to the tray and keeps the music playing.
     pub keep_playing_in_background: bool,
     /// Show the interactive Now Playing widget when hovering over the MacBook notch.
@@ -318,7 +314,7 @@ pub struct Settings {
     pub winamp_window: bool,
     /// Windows and X11: keep a taskbar button while the Winamp window is visible.
     pub winamp_show_taskbar: bool,
-    /// Windows: draw Spotifast's own title bar and window buttons instead of
+    /// Windows: draw Jellifast's own title bar and window buttons instead of
     /// the standard Windows frame.
     pub custom_titlebar: bool,
     /// Skin file or folder name. `None` selects the built-in skin.
@@ -414,8 +410,8 @@ impl std::fmt::Debug for Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            device_name: "Spotifast".to_string(),
-            bitrate: 320,
+            device_name: "Jellifast".to_string(),
+            bitrate: 0,
             normalisation: false,
             autoplay: true,
             gapless: true,
@@ -444,10 +440,8 @@ impl Default for Settings {
             middle_click_autoscroll: false,
             search_history: Vec::new(),
             show_shortcut_hints: true,
-            web_client_id: None,
-            personal_app_nudge_at: None,
-            personal_app_intro_seen: false,
-            playback_authorized: false,
+            server: String::new(),
+            username: String::new(),
             keep_playing_in_background: true,
             mac_notch_widget: false,
             check_for_updates: true,
@@ -764,43 +758,6 @@ impl ProxyConfig {
             _ => false,
         }
     }
-
-    /// Librespot's CONNECT client only understands unauthenticated,
-    /// plaintext HTTP proxies. Never give it a credential-bearing URL: the
-    /// upstream client logs that URL at info level and does not send proxy
-    /// authentication in either of its HTTP paths.
-    pub fn librespot_url(&self) -> Option<reqwest::Url> {
-        match self {
-            Self::Http(manual) => manual.librespot_url(),
-            Self::System => system_http_proxy(),
-            Self::Invalid(_) | Self::Off | Self::Socks(_) => None,
-        }
-    }
-}
-
-/// The HTTP proxy System mode would hand librespot, if it can resolve one.
-/// SOCKS system proxies are ignored: the engine cannot use them.
-fn system_http_proxy() -> Option<reqwest::Url> {
-    let matcher = hyper_util::client::proxy::matcher::Matcher::from_system();
-    let dest = http::Uri::from_static("https://apresolve.spotify.com");
-    let intercept = matcher.intercept(&dest)?;
-    librespot_system_proxy(&intercept)
-}
-
-fn librespot_system_proxy(
-    intercept: &hyper_util::client::proxy::matcher::Intercept,
-) -> Option<reqwest::Url> {
-    if intercept.basic_auth().is_some() || intercept.raw_auth().is_some() {
-        return None;
-    }
-    http_proxy_from_uri(intercept.uri())
-}
-
-fn http_proxy_from_uri(uri: &http::Uri) -> Option<reqwest::Url> {
-    match uri.scheme_str() {
-        Some("http") => reqwest::Url::parse(&uri.to_string()).ok(),
-        _ => None,
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -886,10 +843,6 @@ impl ManualProxy {
             proxy = proxy.basic_auth(&self.username, &self.password);
         }
         Ok(proxy)
-    }
-
-    fn librespot_url(&self) -> Option<reqwest::Url> {
-        (self.username.is_empty() && self.password.is_empty()).then(|| self.endpoint.clone())
     }
 
     /// The credential-free endpoint, for logs and the debugger.
@@ -1049,7 +1002,7 @@ mod tests {
     /// rather than dropped as unreadable and replaced with the defaults.
     #[test]
     fn a_settings_file_saved_with_a_byte_order_mark_keeps_its_preferences() {
-        let dir = std::env::temp_dir().join(format!("spotifast-bom-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("jellifast-bom-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("settings.json");
         std::fs::write(
@@ -1072,14 +1025,14 @@ mod tests {
     #[test]
     fn older_library_settings_keep_liked_songs_ahead_of_existing_pins() {
         let settings: Settings = serde_json::from_str(
-            r#"{"pinned_contexts":["spotify:playlist:one"],"sidebar_order":["spotify:playlist:two"]}"#,
+            r#"{"pinned_contexts":["jellyfin:playlist:one"],"sidebar_order":["jellyfin:playlist:two"]}"#,
         ).unwrap();
         assert!(settings.liked_songs_pinned);
         assert_eq!(
             settings.library_pins(),
-            [super::LIKED_SONGS_KEY, "spotify:playlist:one"]
+            [super::LIKED_SONGS_KEY, "jellyfin:playlist:one"]
         );
-        assert_eq!(settings.sidebar_order, ["spotify:playlist:two"]);
+        assert_eq!(settings.sidebar_order, ["jellyfin:playlist:two"]);
     }
 
     #[test]
@@ -1332,7 +1285,7 @@ mod tests {
 
     #[test]
     fn a_legacy_socks_url_becomes_socks_mode() {
-        let dir = std::env::temp_dir().join(format!("spotifast-proxy-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("jellifast-proxy-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("settings.json");
         std::fs::write(
@@ -1359,29 +1312,12 @@ mod tests {
         let http = super::ManualProxy::parse(super::ManualKind::Http, "127.0.0.1", "7890", "", "")
             .unwrap();
         assert_eq!(http.redacted().as_str(), "http://127.0.0.1:7890/");
-        assert!(
-            super::ProxyConfig::Http(http.clone())
-                .librespot_url()
-                .is_some()
-        );
 
         let socks =
             super::ManualProxy::parse(super::ManualKind::Socks, "127.0.0.1", "1080", "", "")
                 .unwrap();
         assert_eq!(socks.redacted().scheme(), "socks5h");
         assert_eq!(socks.redacted().port(), Some(1080));
-        assert_eq!(super::ProxyConfig::Socks(socks).librespot_url(), None);
-    }
-
-    #[test]
-    fn engine_only_accepts_plain_http_proxy_urls() {
-        assert_eq!(super::ProxyConfig::Off.librespot_url(), None);
-        let http_uri: http::Uri = "http://127.0.0.1:8080".parse().unwrap();
-        let https_uri: http::Uri = "https://127.0.0.1:8080".parse().unwrap();
-        let socks_uri: http::Uri = "socks5://127.0.0.1:1080".parse().unwrap();
-        assert!(super::http_proxy_from_uri(&http_uri).is_some());
-        assert!(super::http_proxy_from_uri(&https_uri).is_none());
-        assert!(super::http_proxy_from_uri(&socks_uri).is_none());
     }
 
     #[test]
@@ -1399,29 +1335,9 @@ mod tests {
         assert_eq!(redacted.password(), None);
         assert_eq!(proxy.username, "alice/name");
         assert_eq!(proxy.password, " secret/with spaces ");
-        assert_eq!(
-            super::ProxyConfig::Http(proxy.clone()).librespot_url(),
-            None
-        );
         let debug = format!("{proxy:?}");
         assert!(!debug.contains("alice"));
         assert!(!debug.contains("secret"));
-    }
-
-    #[test]
-    fn system_proxy_authentication_and_tls_endpoints_stay_out_of_librespot() {
-        let authenticated = hyper_util::client::proxy::matcher::Matcher::builder()
-            .all("http://alice:secret@127.0.0.1:8080")
-            .build();
-        let destination = http::Uri::from_static("https://apresolve.spotify.com");
-        let intercept = authenticated.intercept(&destination).unwrap();
-        assert!(super::librespot_system_proxy(&intercept).is_none());
-
-        let tls = hyper_util::client::proxy::matcher::Matcher::builder()
-            .all("https://127.0.0.1:8080")
-            .build();
-        let intercept = tls.intercept(&destination).unwrap();
-        assert!(super::librespot_system_proxy(&intercept).is_none());
     }
 
     #[test]
@@ -1461,23 +1377,21 @@ mod tests {
     }
 
     #[test]
-    fn personal_app_nudge_time_is_backward_compatible_and_round_trips() {
+    fn the_server_and_user_name_round_trip_and_no_password_is_ever_written() {
         let older: Settings = serde_json::from_str("{}").unwrap();
-        assert_eq!(older.personal_app_nudge_at, None);
-        assert!(!older.personal_app_intro_seen);
+        assert!(older.server.is_empty());
+        assert!(older.username.is_empty());
 
         let settings = Settings {
-            personal_app_nudge_at: Some("2026-09-03T15:00:00Z".into()),
-            personal_app_intro_seen: true,
+            server: "https://music.example.org".into(),
+            username: "jack".into(),
             ..Settings::default()
         };
         let json = serde_json::to_string(&settings).unwrap();
         let restored: Settings = serde_json::from_str(&json).unwrap();
-        assert_eq!(
-            restored.personal_app_nudge_at,
-            settings.personal_app_nudge_at
-        );
-        assert!(restored.personal_app_intro_seen);
+        assert_eq!(restored.server, settings.server);
+        assert_eq!(restored.username, settings.username);
+        assert!(!json.contains("token"));
     }
 }
 
@@ -1596,7 +1510,7 @@ mod session_tests {
                         id: "folder".into(),
                         name: "Favorites".into(),
                     },
-                    RootlistEntry::Playlist("spotify:playlist:one".into()),
+                    RootlistEntry::Playlist("jellyfin:playlist:one".into()),
                     RootlistEntry::FolderEnd,
                 ],
             }),
@@ -1610,7 +1524,7 @@ mod session_tests {
     #[test]
     fn a_new_session_atomically_replaces_the_previous_one() {
         let root = std::env::temp_dir().join(format!(
-            "spotifast-session-test-{}-{:?}",
+            "jellifast-session-test-{}-{:?}",
             std::process::id(),
             std::thread::current().id()
         ));

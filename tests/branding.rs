@@ -1,14 +1,14 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const COMMAND: &str = env!("CARGO_BIN_EXE_spotifast");
+const COMMAND: &str = env!("CARGO_BIN_EXE_jellifast");
 
 struct Scratch(PathBuf);
 
 impl Scratch {
     fn new() -> Self {
         let path =
-            std::env::temp_dir().join(format!("spotifast-branding-{:016x}", rand::random::<u64>()));
+            std::env::temp_dir().join(format!("jellifast-branding-{:016x}", rand::random::<u64>()));
         std::fs::create_dir(&path).unwrap();
         Self(path)
     }
@@ -26,31 +26,26 @@ fn the_command_reports_its_name_and_passes_the_update_version_check() {
     assert!(output.status.success());
     assert_eq!(
         String::from_utf8(output.stdout).unwrap().trim(),
-        format!("spotifast {}", env!("CARGO_PKG_VERSION"))
+        format!("jellifast {}", env!("CARGO_PKG_VERSION"))
     );
     let help = Command::new(COMMAND).arg("--help").output().unwrap();
     assert!(help.status.success());
     assert!(
         String::from_utf8(help.stdout)
             .unwrap()
-            .contains("Usage: spotifast")
+            .contains("Usage: jellifast")
     );
-    assert_eq!(spotifast::updates::CONFIG.slug, "spotifast");
+    assert_eq!(jellifast::updates::CONFIG.slug, "jellifast");
 }
 
-/// The app's name before the rename is gone from everything but the past
-/// release notes and the two old guide addresses that still redirect.
-/// Spelled in two halves so this file does not match itself.
+/// The name of the Spotify client this app was forked from appears only
+/// where the fork is credited. Spelled in two halves so this file does not
+/// match itself.
 #[test]
 fn no_file_carries_the_old_name() {
-    let old = ["fast", "potify"].concat();
+    let old = ["spoti", "fast"].concat();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let allowed = [
-        root.join("packaging/release-notes"),
-        // Old guide URLs still redirect, so links from elsewhere keep working.
-        root.join("docs/_guide/using-spotifast.md"),
-        root.join("docs/_guide/what-is-spotifast.md"),
-    ];
+    let allowed = [root.join("README.md")];
     let skipped = [
         "target",
         "_site",
@@ -92,33 +87,33 @@ fn no_file_carries_the_old_name() {
 
 #[test]
 fn existing_preferences_and_custom_connect_names_survive_a_save() {
-    use spotifast::settings::{Settings, ThemeChoice};
+    use jellifast::settings::{Settings, ThemeChoice};
 
     let scratch = Scratch::new();
     let path = scratch.0.join("settings.json");
-    for name in ["Spotifast", "Living room", "Carmine's laptop"] {
+    for name in ["Jellifast", "Living room", "Carmine's laptop"] {
         let saved = Settings {
             device_name: name.into(),
             theme: ThemeChoice::Light,
             volume: 37,
             pinned_contexts: vec![
-                "spotify:playlist:123".into(),
-                spotifast::settings::LIKED_SONGS_KEY.into(),
+                "jellyfin:playlist:123".into(),
+                jellifast::settings::LIKED_SONGS_KEY.into(),
             ],
             ..Settings::default()
         };
         saved.save(&path);
         assert_eq!(Settings::load(&path), saved);
     }
-    assert_eq!(Settings::default().device_name, "Spotifast");
+    assert_eq!(Settings::default().device_name, "Jellifast");
 }
 
 #[cfg(target_os = "linux")]
 #[test]
 fn the_command_forwards_links_to_the_existing_instance_on_a_private_bus() {
-    use spotifast::single_instance::{ControlCommand, Outcome};
+    use jellifast::single_instance::{ControlCommand, Outcome};
 
-    const CHILD: &str = "SPOTIFAST_BRANDING_PRIVATE_BUS";
+    const CHILD: &str = "JELLIFAST_BRANDING_PRIVATE_BUS";
     if std::env::var_os(CHILD).is_none() {
         // A clean build (including Nix) need not have /etc/dbus-1/session.conf.
         // Own the bus configuration too, without loading desktop services.
@@ -150,7 +145,7 @@ fn the_command_forwards_links_to_the_existing_instance_on_a_private_bus() {
             ])
             .env(CHILD, "1")
             // The running copy's slot lives in the runtime directory, so a
-            // Spotifast already running on this machine is left alone.
+            // Jellifast already running on this machine is left alone.
             .env("XDG_RUNTIME_DIR", &scratch.0)
             .output()
             .expect("the Linux test environment needs dbus-run-session");
@@ -173,23 +168,23 @@ fn the_command_forwards_links_to_the_existing_instance_on_a_private_bus() {
         "{}",
         String::from_utf8_lossy(&result.stderr)
     );
-    let Outcome::Only(guard) = spotifast::single_instance::acquire(&Default::default(), None)
+    let Outcome::Only(guard) = jellifast::single_instance::acquire(&Default::default(), None)
     else {
         panic!("the private bus must start without another instance");
     };
     let commands = guard.commands();
     for (link, uri) in [
         (
-            "spotify:track:4uLU6hMCjMI75M1A2tKUQC",
-            "spotify:track:4uLU6hMCjMI75M1A2tKUQC",
+            "jellyfin:track:4uLU6hMCjMI75M1A2tKUQC",
+            "jellyfin:track:4uLU6hMCjMI75M1A2tKUQC",
         ),
         (
-            "https://open.spotify.com/search/here%20comes%20the%20sun",
-            "spotify:search:here%20comes%20the%20sun",
+            "jellifast://search/here%20comes%20the%20sun",
+            "jellyfin:search:here%20comes%20the%20sun",
         ),
         (
-            "spotify://search/%E6%9D%B1%E4%BA%AC",
-            "spotify:search:%E6%9D%B1%E4%BA%AC",
+            "jellifast://search/%E6%9D%B1%E4%BA%AC",
+            "jellyfin:search:%E6%9D%B1%E4%BA%AC",
         ),
     ] {
         let mut child = Command::new(COMMAND)

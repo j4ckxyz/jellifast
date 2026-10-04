@@ -3,8 +3,12 @@ title: Release packaging
 description: Shared packaging automation and application-specific release definitions.
 nav_order: 20
 ---
+> Inherited from the project Jellifast was forked from and adapted to Jellyfin.
+> "Since 0.x" notes refer to that project's releases. See
+> [What Jellyfin Offers](../_reference/what-jellyfin-offers.md) for what differs.
 
-Spotifast keeps release asset definitions, nFPM configuration and native AUR and
+
+Jellifast keeps release asset definitions, nFPM configuration and native AUR and
 Homebrew templates in `native-packages.yaml` and `packaging/`. Common automation comes from the pinned
 [native-packages](https://github.com/crmne/native-packages) gem, installed with `gem install native-packages --version 0.6.0`.
 
@@ -15,9 +19,9 @@ their configured repository variables and secrets. PRs build packages from a
 pinned published release without publishing them. Installation checks cover
 Ubuntu 24.04, Debian 13, Fedora 41 and current Fedora on amd64 and arm64, including
 the GUI libraries loaded at runtime. They do not exercise desktop rendering or
-Spotify playback. Release checks run after the packages are attached.
+the server playback. Release checks run after the packages are attached.
 
-On main, after 0.8.0, Linux launcher and icon filenames use Spotifast, as does
+On main, after 0.8.0, Linux launcher and icon filenames use Jellifast, as does
 the application's window identity. Historical release fixtures retain their
 original matching filenames and window class because their binaries are
 unchanged. Packaging regressions cover current and historical inputs;
@@ -25,7 +29,7 @@ installation checks require the exact identity expected for that version.
 
 The application retains its Flatpak manifests, macOS bundle/signing configuration
 and Windows installer configuration. nFPM does not replace these platform tools.
-See the repository's [maintainer packaging guide](https://github.com/crmne/spotifast/blob/main/PACKAGING.md)
+See the repository's [maintainer packaging guide](https://github.com/j4ckxyz/jellifast/blob/main/PACKAGING.md)
 for commands and the shared tool's [platform coverage](https://github.com/crmne/native-packages/blob/main/docs/platforms.md)
 for the boundaries.
 

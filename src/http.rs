@@ -125,7 +125,7 @@ fn apply_blocking_proxy(
 }
 
 fn user_agent() -> &'static str {
-    concat!("Spotifast/", env!("CARGO_PKG_VERSION"))
+    concat!("Jellifast/", env!("CARGO_PKG_VERSION"))
 }
 
 #[cfg(test)]
@@ -156,7 +156,7 @@ mod tests {
         let http = Http::default();
         let clone = http.clone();
         let replacement = reqwest::Client::builder()
-            .user_agent("spotifast-test")
+            .user_agent("jellifast-test")
             .build()
             .unwrap();
         http.replace(replacement.clone());
@@ -393,39 +393,5 @@ mod tests {
             "ok"
         );
         server.join().unwrap();
-    }
-
-    #[tokio::test]
-    async fn librespot_http_client_sends_connect_through_an_http_proxy() {
-        use std::io::{Read, Write};
-        use std::net::TcpListener;
-        use std::thread;
-
-        let proxy = TcpListener::bind("127.0.0.1:0").unwrap();
-        let proxy_addr = proxy.local_addr().unwrap();
-        let proxy_thread = thread::spawn(move || {
-            let (mut client, _) = proxy.accept().unwrap();
-            client
-                .set_read_timeout(Some(Duration::from_secs(3)))
-                .unwrap();
-            let mut buf = [0u8; 4096];
-            let n = client.read(&mut buf).unwrap_or(0);
-            let _ = client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n");
-            String::from_utf8_lossy(&buf[..n]).into_owned()
-        });
-
-        let proxy_url = reqwest::Url::parse(&format!("http://{proxy_addr}")).unwrap();
-        let client = librespot_core::http_client::HttpClient::new(Some(&proxy_url));
-        let request = http::Request::builder()
-            .method("GET")
-            .uri("https://apresolve.spotify.com/")
-            .body(Default::default())
-            .unwrap();
-        let _ = client.request(request).await;
-        let seen = proxy_thread.join().unwrap();
-        assert!(
-            seen.to_ascii_uppercase().contains("CONNECT") && seen.contains("apresolve.spotify.com"),
-            "librespot should CONNECT through the proxy, got {seen:?}"
-        );
     }
 }
