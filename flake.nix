@@ -120,7 +120,7 @@
                 pname = "jellifast";
                 version = (pkgs.lib.importTOML ./Cargo.toml).package.version;
                 src = self;
-                hash = "sha256-2thLwV0G3+DoKeZF7+xP7v8jgzeTpkamDYey/QBj0E0=";
+                hash = "sha256-3mYEk+u5fkfJ8i+4eudoAY8FwvmGYemobmmhjJpkJG0=";
               };
               # projectm-sys only searches lib, while CMake may otherwise install to lib64.
               postPatch = ''

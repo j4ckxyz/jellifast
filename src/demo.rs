@@ -2919,16 +2919,12 @@ mod tests {
             let text = settings_text(&ctx, &mut app, query);
             assert!(text.iter().any(|text| text == row), "{query}: {text:?}");
         }
+        // The output has one backend on every platform, so no row offers a
+        // choice between two.
         for query in ["Rodio", "ALSA"] {
             let text = settings_text(&ctx, &mut app, query);
-            assert_eq!(
-                text.iter().any(|text| text == "Audio output"),
-                cfg!(target_os = "linux")
-            );
-            assert_eq!(
-                text.iter().any(|text| text == "Playback on this computer"),
-                cfg!(target_os = "linux")
-            );
+            assert!(!text.iter().any(|text| text == "Audio output"));
+            assert!(!text.iter().any(|text| text == "Playback on this computer"));
         }
         app.local_playback =
             crate::backend::LocalPlayback::Failed("Test connection failure".into());

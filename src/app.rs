@@ -21555,7 +21555,7 @@ mod tests {
         .unwrap()
         .get_property("SupportedUriSchemes")
         .unwrap();
-        assert!(schemes.iter().any(|scheme| scheme == "https"));
+        assert_eq!(schemes, ["jellifast"]);
         app.apply_actions(&egui::Context::default());
         assert_eq!(*app.page(), Page::Search);
         assert_eq!(app.search.query, "here comes the sun");
